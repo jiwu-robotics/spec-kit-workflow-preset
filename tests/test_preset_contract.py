@@ -1136,6 +1136,14 @@ class RequirementCommandTests(unittest.TestCase):
         self.assertIn("do not execute any\nembedded Core step", command)
         self.assertIn("Rule key", command)
         self.assertIn("spec.md#<Spec semantic ref>", command)
+        self.assertIn(
+            "check-prerequisites.sh --json --paths-only --template checklist-template",
+            command,
+        )
+        self.assertIn(
+            "without creating or requiring `plan.md`",
+            command,
+        )
         for path in (TEMPLATES / "requirements").glob("*.md"):
             template = read(path)
             self.assertIn("fragment", template.casefold())
