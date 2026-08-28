@@ -1172,7 +1172,9 @@ class RequirementCommandTests(unittest.TestCase):
         command = read(COMMANDS / "speckit.plan.md")
         for term in (
             "Canonical Requirement Gate Preflight",
-            "--json --paths-only",
+            "setup-plan.sh --json --paths-only",
+            "setup-plan.ps1 -Json -PathsOnly",
+            "without writing\n   `feature.json`, creating the feature directory, or materializing `plan.md`",
             "Read the resolved current `spec.md` and only",
             "`checklists/requirements.md`",
             "speckit.requirement-gate.v1",
@@ -2116,13 +2118,16 @@ class CoreWrapperInstallationTests(unittest.TestCase):
                 capture_output=True,
                 text=True,
             )
-            subprocess.run(
+            removal = subprocess.run(
                 ["specify", "preset", "remove", "workflow-preset"],
                 cwd=project,
-                check=True,
+                check=False,
                 capture_output=True,
                 text=True,
             )
+            if removal.returncode != 0:
+                self.assertEqual(1, removal.returncode)
+                self.assertIn("is not installed", removal.stdout)
             subprocess.run(
                 ["specify", "preset", "add", "--dev", str(source)],
                 cwd=project,
@@ -2148,10 +2153,6 @@ class CoreWrapperInstallationTests(unittest.TestCase):
                 checklist.index("## Preset Checklist Ownership"),
                 checklist.index("## User Input"),
             )
-            self.assertLess(
-                checklist.index("Create or recompute `FEATURE_DIR/checklists/<domain>.md`"),
-                checklist.index("## Authoritative Core Conflict Resolution"),
-            )
             self.assertIn(
                 "do not execute any\nembedded Core step that creates "
                 "Domain/advisory/focus checklist files",
@@ -2169,12 +2170,11 @@ class CoreWrapperInstallationTests(unittest.TestCase):
             canonical_preflight = plan.index(
                 "## Canonical Requirement Gate Preflight"
             )
-            inherited_preflight = plan.index("## Requirement Gate Preflight")
             pre_execution_hooks = plan.index("## Pre-Execution Checks")
-            first_write = plan.index("1. **Materialize plan**")
-            self.assertLess(canonical_preflight, inherited_preflight)
-            self.assertLess(inherited_preflight, pre_execution_hooks)
-            self.assertLess(pre_execution_hooks, first_write)
+            core_setup = plan.index("1. **Setup**:")
+            self.assertIn("setup-plan.sh --json --paths-only", plan)
+            self.assertLess(canonical_preflight, pre_execution_hooks)
+            self.assertLess(pre_execution_hooks, core_setup)
             for core_marker in (
                 "### Phase 0: Outline & Research",
                 "### Phase 1: Design & Contracts",

@@ -32,10 +32,12 @@ Complete this preflight before `hooks.before_plan`, Core setup without
 `--paths-only`, plan-template materialization, directory creation, X0, or any
 other Plan write:
 
-1. Run the inherited setup script once in its official
-   `--json --paths-only` / `-Json -PathsOnly` mode. This is read-only feature
-   and path resolution; it must not create the feature directory or materialize
-   `plan.md`.
+1. Run `.specify/scripts/bash/setup-plan.sh --json --paths-only` or
+   `.specify/scripts/powershell/setup-plan.ps1 -Json -PathsOnly` exactly once.
+   The selected Core setup script must resolve paths without writing
+   `feature.json`, creating the feature directory, or materializing `plan.md`;
+   unsupported flags or any such write emit
+   `REQUIREMENT_GATE_CORE_WRAPPER_INCOMPATIBLE` and stop.
 2. Read the resolved current `spec.md` and only
    `checklists/requirements.md`. Do not scan or aggregate another checklist.
 3. Compute SHA-256 over the exact Spec bytes as
