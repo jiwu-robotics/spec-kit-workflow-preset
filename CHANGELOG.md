@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Required Core `setup-plan` path-only preflight to reject unsupported flags or
+  any write to feature metadata, directories, or `plan.md` before the
+  Requirement Gate passes.
+
 - Upgraded the feature-local UI carrier to a provider/framework-neutral
   Canonical UI Specification in `spec.md`, covering 14 stable object families
   from Page (`UIP-*`) through Acceptance Matrix (`UIAC-*`).

@@ -30,8 +30,9 @@ questions, call Clarify or Plan, or read Plan/Tasks as strategy inputs.
 
 ## Canonical Execution
 
-1. Use Core's official path-only mechanism to resolve `FEATURE_DIR` and
-   `FEATURE_SPEC`; require the current Spec and stop if Plan already exists.
+1. Run `.specify/scripts/bash/check-prerequisites.sh --json --paths-only --template checklist-template`
+   or `.specify/scripts/powershell/check-prerequisites.ps1 -Json -PathsOnly -Template checklist-template`
+   exactly once. It resolves `FEATURE_DIR`, `FEATURE_SPEC`, and the composed template without creating or requiring `plan.md`.
 2. Compute SHA-256 over the exact `spec.md` bytes as
    `sha256:<lowercase-hex>`.
 3. Inventory every active, replaced, retired, or explicitly N/A stable Spec
