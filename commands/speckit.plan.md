@@ -181,7 +181,7 @@ Use this decision table; never infer N/A merely because an artifact is absent:
 | `class-diagram.md` | multiple cooperating objects, dependency direction, patterns, or object ownership must be designed | one object or responsibilities are fully expressed without an object relationship view; record the concrete reason | trigger applies but responsibilities/relationships cannot yet be resolved |
 | interface contracts | an externally observable protocol, input/output, error, compatibility/versioning, or state-effect boundary must be designed | X2-A is pure domain/internal-object design with no externally observable interface contract; record the concrete reason | an interface trigger applies but its observable contract cannot yet be resolved |
 | `contracts/sequences.md` | observable cross-boundary order, async callback, retry, rollback, compensation, or failure propagation exists | no observable ordering or failure-flow design exists; record the concrete reason | trigger applies but participants/order/failure path is unresolved |
-| X2-B + `ui-ux-design.md`/UIF | any `UX-*`, `UI-*`, `VIS-*`, Canonical UI object, interactive surface/state, responsive, asset, or accessibility delivery applies | feature has no user-visible or interactive delivery; cite the scoped Spec evidence | applicable UI/visual/Canonical refs lack a local delivery mapping or stable blocker |
+| X2-B + `ui-ux-design.md`/UIF | any applicable `UX-*`, `UI-*`, `VIS-*`, Canonical UI object, interactive surface/state, responsive, asset, or accessibility delivery applies, including terminal/report UX | feature has no applicable user-visible or interactive delivery; cite the scoped Spec evidence and preserve explicit UI/VIS N/A exclusions | applicable UX/UI/visual/Canonical refs lack a local delivery mapping or stable blocker |
 | BDD/scenario child | parent `TC-*` selects BDD/scenario technique | no parent selects that technique | selected technique lacks its parent-linked child |
 | fixture child | a parent `TC-*` requires reusable/formal setup data | every applicable condition records a fixture-free rationale | required reusable setup is unresolved or missing |
 | assertion child | a parent `TC-*` selects structured scenario/assertion technique | no parent selects a structured assertion technique and each oracle remains complete in its parent | selected technique lacks outcome assertions |
@@ -190,6 +190,18 @@ A blocked applicable lane remains `Blocked`; never relabel it `N/A`. During a
 resume, preserve each independently verified `Required` output and mark only
 the affected output `Blocked`. In particular, X2-C does not require Test
 Conditions, Quickstart, and Test Readiness to become blocked as a group.
+
+Artifact ownership is stage-local: X2-C owns Test Conditions and selected
+technique children, X3 owns `quickstart.md`, and X4 derives final
+`test-readiness.md`. Required/READY X2-C design does not require the later paths
+or final readiness to be Required before their gates close. A blocked later
+artifact must cite a registered root blocker with its original owning lane in
+the reconciliation blocker-owner register. Its dependent gate must explicitly
+be `BLOCKED`, list that root ID, and cite dependency/reconciliation evidence:
+`X3_VALIDATION_PATHS_READY` for quickstart and
+`X2_RECONCILIATION_READY` for blocked final readiness. Do not reassign the root
+owner to the dependent artifact, propagate blocks into independent design, or
+allow final `PLAN_OUTPUT_READY` while any applicable output or row is unclosed.
 
 ## Stage-Local Work Units
 
@@ -280,29 +292,42 @@ presented as a decision.
 ### X2-B UI/UX Delivery
 
 When UI/UX or visual delivery applies, create `ui-ux-design.md` from its stable
-template. It owns reference-based delivery mappings for surfaces, components,
-composition, state, navigation/events, viewports/responsive behavior,
-tokens/themes/variants, assets/fallbacks, accessibility implementation, target
-platform delivery, opaque accepted-source provenance, local delivery method,
-and UI/UX Delivery Readiness.
+template. It owns reference-based delivery mappings for graphical surfaces and
+components or non-graphical terminal/report destinations, handler/state/feedback
+ownership, applicable input/accessibility, and graphical composition,
+navigation, responsive, token/theme/variant, asset/fallback and platform
+delivery. It also owns opaque accepted-source provenance, local delivery
+method, and UI/UX Delivery Readiness.
 
 First build the template's reference-only Spec UI Input Inventory. Inventory
-every applicable `UI-*`, `VIS-*`, all `UIP/UIR/UIC/UID/UIS/UIV/UIW/UIT/UIA/UIM/UIE/UIAX/UIN/UIAC`
-Canonical IDs, `RST-*` scope/dimension, `PXR-*`, `PXT-*`, `PEX-*`, and `ADP-*` policy/dimension ref exactly once with its Spec status and
-one `X2B-*` mapping ref or the same stable upstream blocker. Do not copy
-requirement statements, baseline identities/locators, state/viewport values,
-rendering contexts, fidelity modes, acceptance envelopes, exception bounds, or
-adaptation decisions.
+every applicable `UX-*`, `UI-*`, `VIS-*`, all `UIP/UIR/UIC/UID/UIS/UIV/UIW/UIT/UIA/UIM/UIE/UIAX/UIN/UIAC`
+Canonical IDs, `RST-*` scope/dimension, `PXR-*`, `PXT-*`, `PEX-*`, and `ADP-*`
+policy/dimension ref exactly once with its Spec status and one `X2B-*` mapping
+ref or the same stable upstream blocker. Retain explicit UI/VIS `N/A` rows
+with their Spec-backed reasons and no mapping. Do not copy requirement
+statements, baseline identities/locators, state/viewport values, rendering
+contexts, fidelity modes, acceptance envelopes, exception bounds, or adaptation
+decisions.
 
 Then produce only Plan-owned delivery mappings:
 
-- general UI mappings (`general-ui`) use `X2B-UI-*` IDs and bind
-  `UI/VIS/RST` plus Canonical refs to regions, components,
-  composition/state ownership, navigation, input, responsive, and
-  accessibility delivery plus `DEC-UI-*` and applicable UIF/interface/asset
-  refs. Each applicable Canonical ID occurs in exactly one mapping with one
-  explicit non-empty target-platform component/API/Theme/resource/adaptation
-  binding that retains the object's owning `UI-*`/`VIS-*` refs;
+- general delivery mappings (`general-ui`) retain `X2B-UI-*` IDs. Their
+  `delivery_kind` is `graphical` by default when absent. Graphical mappings bind
+  `UI/VIS/RST` plus Canonical refs to regions, components, composition/state
+  ownership, navigation, input, responsive, and accessibility delivery plus
+  `DEC-UI-*` and applicable UIF/interface/asset refs. Each applicable Canonical
+  ID occurs in exactly one mapping with one explicit non-empty target-platform
+  component/API/Theme/resource/adaptation binding that retains the object's
+  owning `UI-*`/`VIS-*` refs;
+- UX-only terminal/report mappings use the same `general-ui` / `X2B-UI-*`
+  family with explicit `delivery_kind: non_graphical`. Their `spec_refs`
+  consume only applicable `UX-*`; UI/VIS N/A exclusions remain unmapped.
+  Reuse `surface_region_binding` for the terminal/report destination,
+  `component_delivery` for handler/state/feedback ownership, and
+  `navigation_input_responsive_accessibility` for applicable input/accessibility
+  plus concrete N/A reasons for inapplicable navigation/responsive dimensions.
+  Keep `DEC-UI-*`, non-empty `uif_refs`, and applicable interface/source refs;
+  do not invent graphical objects, Canonical bindings, or visual references;
 - pixel-target mappings use `X2B-PX-*` IDs and bind one applicable `PXT-*`
   and its `PXR-*`, `UI/VIS`, `PEX-*`, and `SRC-*` refs to the exact target
   region, component/style/token/asset/layering/overflow delivery, and a local
@@ -317,17 +342,26 @@ decisions; it never repairs, weakens, reclassifies, or duplicates them. A
 product decision returns to Clarify and a later Plan run rebuilds affected
 mappings from the current Spec.
 
-Canonical UI absence or a critical blocker keeps X2-B `Blocked`. X2-B never
-fills the gap by reopening or interpreting UIHTML, Figma, screenshots, product
-descriptions, user descriptions, or other original `SRC-*` content. It consumes
-only local Spec IDs and their already-normalized meaning.
+Canonical UI absence blocks only applicable graphical delivery; it does not
+block an explicit non-graphical UX-only mapping. A critical applicable blocker
+still keeps X2-B `Blocked`. X2-B never fills a gap by reopening or interpreting
+UIHTML, Figma, screenshots, product descriptions, user descriptions, or other
+original `SRC-*` content. It consumes only local Spec IDs and their
+already-normalized meaning.
 
 `contracts/uif/*.expected.json` is a UI/UX interaction contract: start view,
-events, routes, observable states/feedback, API call refs, and transitions. It
-maps applicable `source_refs` plus local `requirement_refs` (`UI-*`/`VIS-*`) and
-may carry `visual_item_refs`, `viewport_matrix_refs`, `state_matrix_refs`,
-`visual_proof_refs`, and `accepted_exception_refs` as declared schema fields. It
-does not own pixel comparison, styling, or API payload schemas.
+events, routes, observable states/feedback, API call refs, and transitions.
+Absent `delivery_kind` retains graphical semantics and `requirement_refs`
+(`UI-*`/`VIS-*`); graphical contracts may carry `visual_item_refs`,
+`viewport_matrix_refs`, `state_matrix_refs`, `visual_proof_refs`, and
+`accepted_exception_refs` as declared schema fields. Explicit
+`delivery_kind: non_graphical` describes terminal/report interaction with
+`UX-*` requirement refs only and absent/empty visual fields. Every referenced
+UIF must match its mapping's delivery kind; the union of its
+`requirement_refs` must equal the mapping's applicable requirement refs, and
+its `source_refs` must cover the mapping's declared `SRC-*` provenance.
+Non-graphical mappings require matching non-graphical UIFs, not a relaxed
+prefix alone. UIF does not own pixel comparison, styling, or API payload schemas.
 
 Do not produce `behavior/uif.intent.json` as a mandatory parent or second SSOT.
 Formal UIF derives from accepted Spec refs plus `ui-ux-design.md`.
@@ -338,11 +372,14 @@ same upstream blocker per ref; resolved Spec, `SRC-*`, `DEC-UI-*`, UIF,
 interface, asset, and exception refs; every applicable `PXT-*` and `ADP-*`
 dimension closed; one UI/UX Delivery Readiness row per required mapping; zero
 Spec-owned duplicated fields; and no unresolved X2-B/reconciliation finding.
-Every applicable Canonical ID must also have exactly one target binding with
-unchanged owning requirements. Explicit Spec `N/A` is preserved with its
-reason; blocked applicability remains blocked and is never relabeled N/A. X2-B
-preserves opaque provenance but MUST NOT open, run, inspect, compare, or
-certify an external source or its fidelity/state as part of the local gate.
+Every applicable graphical Canonical ID must also have exactly one target
+binding with unchanged owning requirements. Explicit Spec `N/A` is preserved
+with its reason and without delivery mappings; blocked applicability remains
+blocked and is never relabeled N/A. Non-graphical UX mappings close only with
+matching UIF kind, requirement ownership, and source coverage, without
+invented Canonical/visual bindings. X2-B preserves opaque provenance but MUST
+NOT open, run, inspect, compare, or certify an external source or its
+fidelity/state as part of the local gate.
 Local pixel delivery ownership stays in UI/UX, never Test Conditions.
 
 Structure-first X2-B validation uses stable failure codes:
@@ -375,8 +412,12 @@ Reject pixel-perfect comparison, screenshot diff, baseline capture, pixel-level
 layout/style assertions, visual restoration, and final pixel review from Test
 Conditions or Test Readiness.
 
-`X2C_TEST_DESIGN_READY` requires all TC dimensions and internal refs, every
-technique-triggered child or stable blocker, and zero pixel-level Test entries.
+`X2C_TEST_DESIGN_READY` requires all TC design dimensions and internal refs,
+every technique-triggered child or stable blocker, and zero pixel-level Test
+entries. A requested X3 path or registered downstream dependency blocker is
+design evidence, not a demand that quickstart or final readiness already be
+Required/READY. Preserve independent complete X2-C design when X2-B/X3 is
+blocked, with explicit rooted dependent-gate evidence.
 
 ## X2 — Cross-Lane Reconciliation
 
@@ -388,17 +429,21 @@ judgment. Inventory each declared `DEC-*`, design/interface/sequence ID, UIF,
 1. every consumed ref resolves to exactly one producer and uses one stable ID or
    name; report missing, duplicate, renamed, and stale refs;
 2. every material `DEC-*` reaches each affected active-lane output;
-3. every UIF API/design ref resolves in X2-A and every applicable UI/VIS plus
-   Canonical ID and every `RST/PXR/PXT/PEX/ADP` inventory ref resolves exactly
-   once in X2-B without weakened owning requirements;
+3. every UIF API/design ref resolves in X2-A; every applicable UX requirement
+   resolves in an explicit non-graphical X2-B mapping with matching UIF
+   ownership; and every applicable UI/VIS plus Canonical ID and every
+   `RST/PXR/PXT/PEX/ADP` inventory ref resolves exactly once in graphical X2-B
+   without weakened owning requirements or mapped N/A exclusions;
 4. every `TC-*` resolves its requirement, design/UIF/interface refs and every
    technique-triggered child;
 5. every condition needing execution declares the expected `VAL-*` mapping or
    a stable X3 blocker;
 6. content remains with its sole owner; record misplaced domain, interface, UI,
    Test, or validation-path content;
-7. each blocker is recorded against its real owning lane, and every dependent
-   lane points to that blocker instead of copying or relabeling it.
+7. each root blocker is registered against its real owning lane; every dependent
+   artifact and gate names that same root ID with explicit dependency evidence
+   instead of copying, hiding, or relabeling it. A blocked dependency does not
+   invalidate independently complete X2-C design.
 
 Record the inventory, findings, blocker owners, and evidence in the
 `X2_RECONCILIATION_READY` section of `plan.md`. Any unresolved finding blocks
@@ -465,9 +510,11 @@ only if X0 + X1 + `X2_RECONCILIATION_READY` + every applicable X2 Gate +
 applicable X3 + complete Design/UI/UX/Test readiness are evidenced, every
 conditional artifact is Required/READY or has a valid N/A reason, all
 Plan-internal refs resolve, the current Spec digest matches recorded X0 and
-UI/UX evidence, all applicable Spec UI refs have closed X2-B mappings or
-propagated blockers, all blockers are lane-owned, and no placeholder is
-presented as a decision. Otherwise it is `BLOCKED` with the failed Gate and
+UI/UX evidence, all applicable Spec UX/UI refs have closed X2-B mappings,
+every applicable readiness row is READY, all blockers retain registered root
+ownership with explicit dependent-gate evidence, and no placeholder is
+presented as a decision. A propagated blocker is valid blocked-state evidence,
+never closure for final READY. Otherwise it is `BLOCKED` with the failed Gate and
 blocker evidence. It validates Plan outputs only.
 
 {CORE_TEMPLATE}

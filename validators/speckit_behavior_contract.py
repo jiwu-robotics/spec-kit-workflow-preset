@@ -26,7 +26,8 @@ def _require_non_empty_list(item: dict[str, Any], *, key: str, context: str) -> 
     if not isinstance(values, list) or not values:
         raise ValueError(f"{context} {item_id} must include non-empty {key}")
 
-def _validate_expected_uif_contract(uif_contract: dict[str, Any]) -> None:
+def validate_expected_uif_references(uif_contract: dict[str, Any]) -> None:
+    """Validate delivery kind and reference ownership, including Plan summaries."""
     uif_id = uif_contract.get("id", "<unknown>")
     source_refs = uif_contract.get("source_refs")
     if not isinstance(source_refs, list) or not source_refs:
@@ -43,13 +44,33 @@ def _validate_expected_uif_contract(uif_contract: dict[str, Any]) -> None:
         raise ValueError(
             f"expected UIF contract {uif_id} must include non-empty requirement_refs"
         )
-    if any(
-        not str(ref).startswith(("UI-", "VIS-"))
-        for ref in requirement_refs
-    ):
+    delivery_kind = uif_contract.get("delivery_kind", "graphical")
+    if delivery_kind not in ("graphical", "non_graphical"):
+        raise ValueError(f"expected UIF contract {uif_id} has invalid delivery_kind")
+    prefixes = ("UX-",) if delivery_kind == "non_graphical" else ("UI-", "VIS-")
+    if any(not str(ref).startswith(prefixes) for ref in requirement_refs):
+        ownership = "UX" if delivery_kind == "non_graphical" else "UI/VIS"
         raise ValueError(
-            f"expected UIF contract {uif_id} has non-UI/VIS requirement_refs"
+            f"expected UIF contract {uif_id} has non-{ownership} requirement_refs"
         )
+    if delivery_kind == "non_graphical":
+        for field in (
+            "canonical_bindings",
+            "visual_item_refs",
+            "viewport_matrix_refs",
+            "state_matrix_refs",
+            "visual_proof_refs",
+            "accepted_exception_refs",
+        ):
+            if uif_contract.get(field):
+                raise ValueError(
+                    f"expected UIF contract {uif_id} non_graphical invents {field}"
+                )
+
+
+def _validate_expected_uif_contract(uif_contract: dict[str, Any]) -> None:
+    validate_expected_uif_references(uif_contract)
+    uif_id = uif_contract.get("id", "<unknown>")
 
     steps = uif_contract.get("steps")
     if not isinstance(steps, list) or not steps:

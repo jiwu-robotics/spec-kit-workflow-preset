@@ -4,6 +4,8 @@ from __future__ import annotations
 import re
 from typing import Any, Iterable
 
+from validators.speckit_behavior_contract import validate_expected_uif_references
+
 from validators.speckit_test_contract import (
     validate_test_conditions,
     validate_test_readiness,
@@ -46,6 +48,7 @@ SPEC_UI_PREFIX_TO_CLASS = {
     "UIE-": "UIE",
     "UIN-": "UIN",
     "UI-": "UI",
+    "UX-": "UX",
     "VIS-": "VIS",
     "RST-": "RST",
     "PXR-": "PXR",
@@ -338,6 +341,21 @@ def _validate_x2b_contract(
         )
     mappings_by_id = dict(zip(mapping_ids, mappings))
     covered_by: dict[str, list[str]] = {ref: [] for ref in spec_by_ref}
+    uifs_by_id = {
+        str(contract["id"]): contract for contract in bundle.get("uif_contracts", [])
+    }
+    for uif_id, contract in uifs_by_id.items():
+        if contract.get("delivery_kind") != "non_graphical":
+            continue
+        if not set(contract["source_refs"]).issubset(all_source_refs):
+            _fail("X2B_SPEC_REF_UNKNOWN", f"{uif_id} has unknown SRC ref")
+        for ref in contract["requirement_refs"]:
+            if ref not in spec_by_ref:
+                _fail("X2B_SPEC_REF_UNKNOWN", f"{uif_id} owns unknown {ref}")
+            if spec_by_ref[ref].get("status") != "specified":
+                _fail("X2B_SPEC_REF_UNMAPPED", f"{uif_id} owns inapplicable {ref}")
+            if not set(spec_by_ref[ref]["source_refs"]).issubset(contract["source_refs"]):
+                _fail("X2B_SPEC_REF_UNMAPPED", f"{uif_id} omits a requirement SRC ref")
 
     for mapping_id, mapping in mappings_by_id.items():
         forbidden = sorted(_mapping_ownership_leaks(mapping))
@@ -357,6 +375,14 @@ def _validate_x2b_contract(
                 "X2B_DELIVERY_DECISION_INCOMPLETE",
                 f"{mapping_id} prefix does not match {kind}",
             )
+        delivery_kind = mapping.get("delivery_kind", "graphical")
+        if delivery_kind not in ("graphical", "non_graphical") or (
+            delivery_kind == "non_graphical" and kind != "general-ui"
+        ):
+            _fail(
+                "X2B_DELIVERY_DECISION_INCOMPLETE",
+                f"{mapping_id} has invalid delivery_kind for {kind}",
+            )
         mapped_refs = list(
             map(str, _require_non_empty_list(mapping, "spec_refs", mapping_id))
         )
@@ -373,6 +399,8 @@ def _validate_x2b_contract(
                     "X2B_BLOCKER_SUPPRESSED",
                     f"{mapping_id} maps blocked Spec ref {ref}",
                 )
+            if spec_by_ref[ref].get("status") == "N/A":
+                _fail("X2B_SPEC_REF_UNMAPPED", f"{ref} N/A was mapped as delivery")
 
         source_refs = set(
             map(str, _require_non_empty_list(mapping, "source_refs", mapping_id))
@@ -419,10 +447,20 @@ def _validate_x2b_contract(
             if field == "asset_refs" and not set(map(str, refs)).issubset(asset_ids):
                 _fail("X2B_SPEC_REF_UNKNOWN", f"{mapping_id} has unknown asset ref")
 
+        for uif_ref in mapping.get("uif_refs", []):
+            if uifs_by_id[uif_ref].get("delivery_kind", "graphical") != delivery_kind:
+                _fail(
+                    "X2B_DELIVERY_DECISION_INCOMPLETE",
+                    f"{mapping_id}/{uif_ref} delivery_kind differs",
+                )
         if kind == "general-ui":
+            allowed_classes = (
+                {"UX"}
+                if delivery_kind == "non_graphical"
+                else ({"UI", "VIS", "RST"} | CANONICAL_UI_CLASSES)
+            )
             if any(
-                _spec_contract_class(ref)
-                not in ({"UI", "VIS", "RST"} | CANONICAL_UI_CLASSES)
+                _spec_contract_class(ref) not in allowed_classes
                 for ref in mapped_refs
             ):
                 _fail(
@@ -439,6 +477,38 @@ def _validate_x2b_contract(
                         "X2B_DELIVERY_DECISION_INCOMPLETE",
                         f"{mapping_id} missing {field}",
                     )
+            if delivery_kind == "non_graphical":
+                uif_refs = _require_non_empty_list(mapping, "uif_refs", mapping_id)
+                owned_refs = {
+                    str(ref)
+                    for uif_ref in uif_refs
+                    for ref in uifs_by_id[uif_ref]["requirement_refs"]
+                }
+                if owned_refs != set(mapped_refs):
+                    _fail(
+                        "X2B_SPEC_REF_UNMAPPED",
+                        f"{mapping_id} UIF ownership differs from its UX refs",
+                    )
+                if any(
+                    not set(uifs_by_id[uif_ref]["source_refs"]).issubset(source_refs)
+                    for uif_ref in uif_refs
+                ):
+                    _fail(
+                        "X2B_SPEC_REF_UNMAPPED",
+                        f"{mapping_id} omits a UIF SRC ref",
+                    )
+                for field in (
+                    "visual_item_refs",
+                    "viewport_matrix_refs",
+                    "state_matrix_refs",
+                    "visual_proof_refs",
+                    "accepted_exception_refs",
+                ):
+                    if mapping.get(field):
+                        _fail(
+                            "X2B_DELIVERY_DECISION_INCOMPLETE",
+                            f"{mapping_id} non_graphical invents {field}",
+                        )
             canonical_refs = {
                 ref
                 for ref in mapped_refs
@@ -807,16 +877,25 @@ def validate_plan_artifact_bundle(bundle: dict[str, Any]) -> None:
         if bundle.get("validation_paths") not in (None, []):
             raise ValueError("N/A X2-C must not carry VAL paths")
     else:
-        allowed_decisions = (
-            {"Required"} if x2c_status == "Required" else {"Required", "Blocked"}
-        )
         for path, decision in x2c_decisions.items():
+            allowed_decisions = (
+                {"Required"}
+                if path == "contracts/test/test-conditions.json" and x2c_status == "Required"
+                else {"Required", "Blocked"}
+            )
             if decision not in allowed_decisions:
-                if x2c_status == "Required":
-                    raise ValueError(f"active X2-C missing required output: {path}")
                 raise ValueError(
-                    f"Blocked X2-C must record {path} as Required/Blocked"
+                    f"active X2-C missing required output: {path}"
+                    if x2c_status == "Required"
+                    else f"Blocked X2-C must record {path} as Required/Blocked"
                 )
+        for path, owner in (
+            ("contracts/test/test-conditions.json", "X2-C"),
+            ("quickstart.md", "X3"),
+            ("test-readiness.md", "X4"),
+        ):
+            if artifacts_by_path[path].get("owner") != owner:
+                raise ValueError(f"{path} has incorrect stage owner; expected {owner}")
 
     conditions_decision = x2c_decisions["contracts/test/test-conditions.json"]
     if conditions_decision == "Required":
@@ -858,6 +937,8 @@ def validate_plan_artifact_bundle(bundle: dict[str, Any]) -> None:
     if quickstart_decision != "Required":
         if bundle.get("validation_paths") not in (None, []):
             raise ValueError("non-required quickstart must not carry VAL paths")
+    elif not bundle.get("validation_paths"):
+        raise ValueError("required quickstart missing VAL paths")
 
     declared_ids: list[str] = []
     declared_ids.extend(
@@ -869,18 +950,7 @@ def validate_plan_artifact_bundle(bundle: dict[str, Any]) -> None:
         contract.get("id", "") for contract in bundle.get("uif_contracts", [])
     )
     for contract in bundle.get("uif_contracts", []):
-        if not contract.get("source_refs") or not contract.get("requirement_refs"):
-            raise ValueError(f"{contract.get('id', 'UIF')} missing source/UI mappings")
-        if any(
-            not str(ref).startswith("SRC-")
-            for ref in contract["source_refs"]
-        ):
-            raise ValueError(f"{contract['id']} has invalid source mapping")
-        if any(
-            not str(ref).startswith(("UI-", "VIS-"))
-            for ref in contract["requirement_refs"]
-        ):
-            raise ValueError(f"{contract['id']} has invalid UI/VIS mapping")
+        validate_expected_uif_references(contract)
     declared_ids.extend(
         condition["id"] for condition in condition_records
     )
@@ -949,14 +1019,22 @@ def validate_plan_artifact_bundle(bundle: dict[str, Any]) -> None:
     blocker_owners = reconciliation.get("blocker_owners")
     if not isinstance(blocker_owners, dict):
         raise ValueError("Plan bundle reconciliation missing blocker owners")
+    if any(
+        not isinstance(blocker, str)
+        or not blocker
+        or not isinstance(owner, str)
+        or not owner.strip()
+        for blocker, owner in blocker_owners.items()
+    ):
+        raise ValueError("Plan bundle blocker registration missing root owner")
     for lane, decision in lanes.items():
         blocker = decision.get("blocker")
         if blocker and blocker_owners.get(blocker) != lane:
             raise ValueError(f"{blocker} has incorrect owning lane")
     for artifact in artifacts:
         blocker = artifact.get("blocker")
-        if blocker and blocker_owners.get(blocker) != artifact.get("owner"):
-            raise ValueError(f"{blocker} has incorrect artifact owner")
+        if blocker and blocker not in blocker_owners:
+            raise ValueError(f"{blocker} missing reconciliation owner")
     for condition in condition_records:
         for blocker_field in ("blocker", "x3_blocker"):
             blocker = condition.get(blocker_field)
@@ -1001,6 +1079,11 @@ def validate_plan_artifact_bundle(bundle: dict[str, Any]) -> None:
             raise ValueError(f"{gate} missing concrete evidence")
         if status == "BLOCKED" and not record.get("blockers"):
             raise ValueError(f"{gate} blocked without blocker evidence")
+        blockers = record.get("blockers", [])
+        if not isinstance(blockers, list):
+            raise ValueError(f"{gate} blockers must be a list")
+        if blockers and status != "BLOCKED":
+            raise ValueError(f"{gate} hides registered blockers behind {status}")
         for blocker in record.get("blockers", []):
             if blocker not in blocker_owners:
                 raise ValueError(f"{gate} blocker missing reconciliation owner")
@@ -1029,6 +1112,60 @@ def validate_plan_artifact_bundle(bundle: dict[str, Any]) -> None:
     if x2c_status != "N/A" and x3_status == "N/A":
         raise ValueError("X3 cannot be N/A when X2-C is active or blocked")
 
+    def require_blocker_gate(blocker: str, gate: str, context: str) -> None:
+        if blocker not in blocker_owners:
+            raise ValueError(f"{context} blocker missing reconciliation owner")
+        if (
+            gates[gate]["status"] != "BLOCKED"
+            or blocker not in gates[gate].get("blockers", [])
+        ):
+            raise ValueError(f"{context} blocker absent from dependent Gate {gate}")
+
+    owner_gates = {
+        "X0/X4": "X0_CONTROL_READY",
+        "X1": "X1_DECISIONS_READY",
+        "X2-A": "X2A_DESIGN_READY",
+        "X2-B": "X2B_UIUX_READY",
+        "X2-C": "X2C_TEST_DESIGN_READY",
+        "X3": "X3_VALIDATION_PATHS_READY",
+        "X4": "X2_RECONCILIATION_READY",
+    }
+    for lane, decision in lanes.items():
+        if decision.get("blocker"):
+            require_blocker_gate(decision["blocker"], owner_gates[lane], lane)
+    for artifact in artifacts:
+        if artifact.get("blocker"):
+            gate = owner_gates.get(artifact.get("owner"))
+            if gate is None:
+                raise ValueError(f"{artifact['path']} blocker has unknown dependent stage")
+            require_blocker_gate(artifact["blocker"], gate, artifact["path"])
+    for mapping in bundle.get("x2b_delivery_mappings", []):
+        if mapping.get("blocker"):
+            require_blocker_gate(mapping["blocker"], "X2B_UIUX_READY", mapping["id"])
+    readiness_by_tc = {
+        row["tc_id"]: row for row in bundle.get("test_readiness_rows", [])
+    }
+    for condition in condition_records:
+        if condition.get("blocker"):
+            require_blocker_gate(
+                condition["blocker"], "X2C_TEST_DESIGN_READY", condition["id"]
+            )
+        if condition.get("x3_blocker"):
+            blocker = condition["x3_blocker"]
+            require_blocker_gate(blocker, "X3_VALIDATION_PATHS_READY", condition["id"])
+            row = readiness_by_tc.get(condition["id"])
+            if row is not None and (
+                row.get("status") != "BLOCKED" or row.get("blocker") != blocker
+            ):
+                raise ValueError(f"{condition['id']} Test Readiness hides X3 blocker")
+    for row in readiness_by_tc.values():
+        if row.get("blocker"):
+            require_blocker_gate(
+                row["blocker"], "X2_RECONCILIATION_READY", row["tc_id"]
+            )
+    if x3_status == "READY" and quickstart_decision != "Required":
+        raise ValueError("X3 READY requires Required quickstart")
+
     text = " ".join(_strings(bundle))
     normalized = text.casefold()
     if any(token.casefold() in normalized for token in PLACEHOLDERS):
@@ -1048,6 +1185,7 @@ def validate_plan_artifact_bundle(bundle: dict[str, Any]) -> None:
         )
         and all(
             condition.get("status") == "required"
+            and not condition.get("x3_blocker")
             for condition in condition_records
         )
     )

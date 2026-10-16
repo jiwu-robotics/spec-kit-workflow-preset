@@ -26,11 +26,28 @@ source, revision, locator, or baseline. The same digest is recorded in
 | Lane | Applicability | Source refs | Declared outputs | Dependencies | Internal gate |
 |---|---|---|---|---|---|
 | X2-A Domain/Object/Interface | Required / N/A: reason / Blocked: ID | [refs] | [paths] | [lane refs] | X2A_DESIGN_READY |
-| X2-B UI/UX Delivery | Required / N/A: reason / Blocked: ID | [SRC + UI/VIS/RST/PXR/PXT/PEX/ADP refs] | [paths] | [lane refs] | X2B_UIUX_READY |
+| X2-B UI/UX Delivery | Required / N/A: reason / Blocked: ID | [SRC + UX or UI/VIS/RST/PXR/PXT/PEX/ADP refs; explicit non_graphical for terminal/report UX] | [paths] | [lane refs] | X2B_UIUX_READY |
 | X2-C Test & Acceptance | Required / N/A: reason / Blocked: ID | [refs] | [paths] | [lane refs] | X2C_TEST_DESIGN_READY |
 
 An N/A X2-B decision records both the scoped `spec.md` section/ref and the
-concrete reason that no applicable UI contract ref exists.
+concrete reason that no applicable UX/UI contract ref exists. Applicable UX
+terminal/report delivery activates X2-B using existing `general-ui` /
+`X2B-UI-*` mappings with explicit `delivery_kind: non_graphical`, matching UX
+UIF ownership, and no Canonical/visual bindings. Graphical delivery remains
+the default; explicit UI/VIS N/A exclusions stay unmapped.
+
+### Stage-Owned Artifact Decisions
+
+| Artifact | Owning stage | Applicability | Readiness evidence / root blocker |
+|---|---|---|---|
+| Test Conditions and selected technique children | X2-C | Required / N/A: reason / Blocked: ID | [Independent X2C_TEST_DESIGN_READY design evidence.] |
+| quickstart.md | X3 | Required / N/A: reason / Blocked: ID | [X3_VALIDATION_PATHS_READY path evidence or explicit rooted dependency block.] |
+| test-readiness.md | X4 final derivation | Required / N/A: reason / Blocked: ID | [Closed TC/VAL rows or explicit rooted block in X2_RECONCILIATION_READY.] |
+
+X2-C Required/READY does not force later quickstart or final readiness to be
+Required before their gates close. Preserve independently complete design;
+later blocked artifacts retain their real stage owner and reference the
+registered root blocker rather than adopting its ownership.
 
 ### Cross-Lane Dependency Register
 
@@ -57,6 +74,18 @@ evidence. A missing or invalid evidence cell means the Gate is not ready.
 | Ref / mapping | Producer / owner | Consumers | Resolved target | Drift / ownership finding | Status / blocker |
 |---|---|---|---|---|---|
 | [DEC/X2B/UIF/TC/VAL/design ref] | [lane + artifact] | [lane artifacts] | [stable ID/path] | [none or finding] | [READY/BLOCKED: ID] |
+
+### Root Blocker Ownership
+
+| Blocker ID | Original owning lane | Root evidence | Dependent artifacts / gates | Dependency / propagation evidence |
+|---|---|---|---|---|
+| [stable root ID] | [actual root owner] | [artifact/ref] | [artifact + BLOCKED gate citing the same ID] | [dependency/reconciliation refs] |
+
+Register every propagated root in reconciliation `blocker_owners`; dependent
+gate records include `status`, `evidence`, and `blockers`. A blocked quickstart
+requires explicit X3 gate evidence; blocked final readiness requires explicit
+reconciliation gate evidence. No hidden/unregistered blocker, root-owner
+reassignment, or premature final READY is allowed.
 
 ### Resume Checkpoint
 
@@ -105,4 +134,7 @@ No task IDs, exact per-task paths, or implementation order belong here.
 
 `PLAN_OUTPUT_READY` is derived from the Internal Gate Summary, reconciliation,
 conditional artifact decisions, readiness products, resolved refs, and
-placeholders. Do not mark it READY from file presence or prose summary alone.
+placeholders. All applicable outputs and readiness rows must close before
+READY. Valid rooted propagation preserves blocked-state evidence only; it
+does not close an output or invalidate independent X2-C design. Do not mark
+READY from file presence or prose summary alone.

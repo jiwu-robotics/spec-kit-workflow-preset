@@ -50,8 +50,12 @@ Verify only immediate handoff completeness and Tasks' own output contract:
 - Design, UI/UX, and Test readiness independently present or explicitly N/A;
 - the complete X2-B mapping inventory has only `Required`, `N/A`, or `Blocked`
   rows and uses current `X2B-UI-*`, `X2B-PX-*`, and `X2B-ADP-*` IDs;
-- every Required mapping resolves to declared `UI-*`, `VIS-*`, `PXT-*`,
-  `PEX-*`, or `ADP-*` Plan refs;
+- every Required mapping resolves to declared `UX-*` for explicit
+  `delivery_kind: non_graphical`, or `UI-*`, `VIS-*`, `PXT-*`, `PEX-*`, or
+  `ADP-*` for graphical delivery (the default when `delivery_kind` is absent);
+- non-graphical `general-ui` mappings retain `X2B-UI-*`, matching
+  non-graphical UIF ownership and UX traceability, without Canonical/visual
+  bindings; explicit UI/VIS N/A exclusions remain unmapped;
 - every Required mapping is classified as an implementation mapping or as a
   review-method-only mapping with an explicit no-task rationale;
 - stable Plan blockers and runtime prerequisites remain distinguishable.
@@ -88,16 +92,19 @@ duplicate path/dimension coverage:
 
 | Mapping class | Concrete task responsibility |
 |---|---|
-| `X2B-UI-*` | component, state, interaction, navigation, responsive, accessibility |
+| `X2B-UI-*` | graphical: component, state, interaction, navigation, responsive, accessibility; explicit non_graphical: terminal/report destination, handler/state/feedback, applicable input/accessibility |
 | `X2B-PX-*` | geometry, sizing, spacing, alignment, flow, overflow, clipping, typography, text metrics, color, gradient, border, radius, shadow, opacity, effects, asset preparation/binding/crop/aspect/fitting, layering/stacking/fixed-sticky/occlusion |
 | `X2B-ADP-*` | target component, navigation, presentation, input modality, gestures, system UI, safe regions, adaptive layout, accessibility scaling, localization, layout direction |
 
 Each emitted task names its mapping ID, covered implementation dimensions,
 declared traceability refs, and exact file/configuration/asset paths. For each
-`X2B-UI-*`, the task set preserves every mapped Canonical UI ID (`UIP/UIR/UIC/
-UID/UIS/UIV/UIW/UIT/UIA/UIM/UIE/UIAX/UIN/UIAC`) together with the X2-B mapping;
-no applicable Page, Component, State, Variant, or Event constraint may be
-dropped. A
+`X2B-UI-*`, preserve `delivery_kind` and all mapped `UX-*` refs for
+non-graphical delivery without inventing graphical tasks or Canonical refs.
+For graphical delivery, the task set preserves every mapped Canonical UI ID
+(`UIP/UIR/UIC/UID/UIS/UIV/UIW/UIT/UIA/UIM/UIE/UIAX/UIN/UIAC`) together with the
+X2-B mapping; no applicable Page, Component, State, Variant, or Event
+constraint may be dropped. Inapplicable non-graphical navigation/responsive
+dimensions retain their Plan-authored N/A rationale, not forced task coverage. A
 review-method-only row emits no task and retains its Plan-authored rationale.
 
 Example:
@@ -140,7 +147,7 @@ populated Plan products:
 | data model | domain/persistence/migration/invariant work |
 | interface contracts | contract tests and interface implementation |
 | sequences | orchestration/retry/rollback/compensation dependencies |
-| `X2B-UI-*` | component/state/interaction/navigation/responsive/accessibility implementation |
+| `X2B-UI-*` | graphical component/state/interaction/navigation/responsive/accessibility, or explicit non_graphical terminal/report handler/state/feedback and applicable input/accessibility implementation |
 | `X2B-PX-*` | geometry/typography/appearance/asset/layering/overflow/clipping implementation |
 | `X2B-ADP-*` | platform component/navigation/input/system/safe-region/adaptive/accessibility/localization implementation |
 | Test Readiness | fixture, test-first, validation, evidence work |
@@ -169,6 +176,8 @@ user-journey tests are generated only from Required Test Conditions.
 UI/UX Delivery Readiness is implementation readiness only. It may generate:
 
 - view/component and state implementation;
+- terminal/report destination, handler/state/feedback, and applicable
+  input/accessibility for explicit non-graphical UX mappings;
 - loading/empty/error/success/permission/disabled/focus behavior;
 - functional responsive, navigation, interaction, and accessibility work;
 - geometry, sizing, spacing, alignment, flow, overflow, and clipping;
@@ -181,7 +190,8 @@ UI/UX Delivery Readiness is implementation readiness only. It may generate:
   UI, safe-region, adaptive-layout, accessibility-scaling, localization, and
   layout-direction implementation.
 
-Local `UI-*`, `VIS-*`, Canonical UI IDs, `PXT-*`, `PEX-*`, and `ADP-*` refs guide only the
+Local `UX-*` for non-graphical delivery, or `UI-*`, `VIS-*`, Canonical UI IDs,
+`PXT-*`, `PEX-*`, and `ADP-*` for graphical delivery, guide only the
 implementation dimensions already mapped in X2-B. `PXT-*` and `PEX-*` are
 traceability inputs, not authority to copy the Spec-owned baseline locator,
 fidelity mode, acceptance envelope, exception bound, or adaptation decision.
@@ -266,6 +276,7 @@ Applicable review scopes and sources:
 | behavior/test contract | Test Readiness and optional technique contracts |
 | data side effect | data model, sequences, invariants, oracles |
 | sequence consistency | sequence contracts |
+| X2-B non-graphical terminal/report interaction conformance | explicit non_graphical `X2B-UI-*`, every mapped `UX-*`, UI/UX design, and matching non-graphical UIF |
 | X2-B Canonical Page/Composition/Component/Content/State/Event/Token/Asset/Motion/Accessibility/Acceptance conformance | `X2B-UI-*` plus mapped Canonical UI refs, UI/UX design, and UIF |
 | X2-B geometry/typography/appearance | `X2B-PX-*` implementation mappings |
 | X2-B asset/layering/overflow/clipping | `X2B-PX-*` implementation mappings |
@@ -273,12 +284,13 @@ Applicable review scopes and sources:
 | evidence completeness | Test Readiness and `VAL-*` paths |
 
 Each review task names concrete source artifacts, implementation surfaces, and
-functional evidence. It covers every Required X2-B implementation mapping and
-reuses every applicable mapped Canonical UI ref to check Page, Composition,
-Component, Content, State, Variant, Viewport, Token, Asset, Motion, Event,
-Accessibility, Native Exception, and Acceptance Matrix conformance. It checks
-mapping-to-code conformance, unresolved blockers, and Plan revision
-drift. Review-method-only rows remain no-task rationales. UI review is
+functional evidence. It covers every Required X2-B implementation mapping,
+preserves non-graphical delivery kind and every mapped UX requirement without
+invented Canonical refs, and reuses every applicable graphical Canonical UI ref
+to check Page, Composition, Component, Content, State, Variant, Viewport,
+Token, Asset, Motion, Event, Accessibility, Native Exception, and Acceptance
+Matrix conformance. It checks mapping-to-code conformance, unresolved blockers,
+and Plan revision drift. Review-method-only rows remain no-task rationales. UI review is
 code/design-contract review only; it MUST NOT
 judge rendered visual fidelity, evaluate an acceptance envelope, or require
 screenshot/pixel evidence.

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from copy import deepcopy
 import json
 import re
 import shutil
 import subprocess
 import tempfile
 import unittest
+from copy import deepcopy
 from pathlib import Path
 
 import yaml
@@ -74,6 +74,122 @@ def read(path: Path) -> str:
 
 def load_json(path: Path) -> dict:
     return json.loads(read(path))
+
+
+def non_graphical_plan_bundle() -> dict:
+    return load_json(PLAN_BUNDLE_FIXTURES / "non_graphical_ux.json")
+
+
+def blocked_non_graphical_plan_bundle() -> dict:
+    bundle = non_graphical_plan_bundle()
+    blocker = "BLK-CONSOLE-DELIVERY"
+    bundle["lanes"]["X2-B"] = {"status": "Blocked", "blocker": blocker}
+    mapping = bundle["x2b_delivery_mappings"][0]
+    mapping.update(status="BLOCKED", blocker=blocker)
+    bundle["uiux_readiness_rows"][0] = {
+        "mapping_ref": mapping["id"], "status": "BLOCKED", "blocker": blocker
+    }
+    for artifact in bundle["artifacts"]:
+        if artifact["path"] == "quickstart.md":
+            artifact.clear()
+            artifact.update(
+                path="quickstart.md", decision="Blocked", owner="X3", blocker=blocker
+            )
+    for condition in bundle["test_conditions"]["conditions"]:
+        del condition["quickstart_ref"]
+        condition["x3_blocker"] = blocker
+    bundle["validation_paths"] = []
+    bundle["test_readiness_rows"] = [
+        {"tc_id": condition["id"], "status": "BLOCKED", "blocker": blocker}
+        for condition in bundle["test_conditions"]["conditions"]
+    ]
+    bundle["reconciliation"]["resolved_refs"] = [
+        ref for ref in bundle["reconciliation"]["resolved_refs"]
+        if not ref.startswith("VAL-")
+    ]
+    bundle["reconciliation"]["blocker_owners"] = {blocker: "X2-B"}
+    for gate in (
+        "X2B_UIUX_READY", "X2_RECONCILIATION_READY", "X3_VALIDATION_PATHS_READY"
+    ):
+        bundle["gates"][gate] = {
+            "status": "BLOCKED",
+            "evidence": [f"plan.md#{blocker}"],
+            "blockers": [blocker],
+        }
+    bundle["plan_output_ready"] = "BLOCKED"
+    return bundle
+
+
+def non_graphical_tasks_bundle(plan: dict | None = None) -> dict:
+    plan = non_graphical_plan_bundle() if plan is None else plan
+    dimensions = ["component", "state", "interaction", "accessibility"]
+    mappings = [
+        {
+            "id": mapping["id"],
+            "delivery_kind": mapping["delivery_kind"],
+            "status": "Required" if mapping["status"] == "READY" else "Blocked",
+            "implementation_dimensions": list(dimensions),
+            "traceability_refs": list(mapping["spec_refs"]),
+            "depends_on": [],
+            **({"blocker": mapping["blocker"]} if mapping.get("blocker") else {}),
+        }
+        for mapping in plan["x2b_delivery_mappings"]
+    ]
+    paths = ["src/configuration.cpp", "src/evaluation_report.cpp"]
+    tasks = [
+        {
+            "id": f"T{101 + index}",
+            "kind": "implementation",
+            "action_classes": ["implementation"],
+            "paths": [path],
+            "mapping_refs": [mapping["id"]],
+            "implementation_dimensions": list(dimensions),
+            "traceability_refs": list(mapping["traceability_refs"]),
+            "depends_on": [],
+            "parallel": True,
+            "description": "Implement mapped terminal/report input, state and feedback.",
+        }
+        for index, (mapping, path) in enumerate(zip(mappings, paths))
+    ]
+    tc_refs = [
+        row["tc_id"] for row in plan["test_readiness_rows"] if row["status"] == "READY"
+    ]
+    return {
+        "plan_output_ready": plan["plan_output_ready"],
+        "current_plan_revision": "PLAN-NON-GRAPHICAL",
+        "tasks_handoff_revision": "PLAN-NON-GRAPHICAL",
+        "uiux_delivery_readiness": plan["gates"]["X2B_UIUX_READY"]["status"],
+        "declared_traceability_refs": [
+            record["ref"] for record in plan["spec_input"]["ui_contract_refs"]
+        ],
+        "x2b_mappings": mappings,
+        "tasks": tasks,
+        "required_test_readiness_tc_refs": tc_refs,
+        "test_tasks": [
+            {
+                "id": "T103",
+                "action_classes": ["functional-validation"],
+                "tc_refs": tc_refs,
+                "paths": ["tests/test_terminal_report.py"],
+            }
+        ],
+        "phases": ["Setup", "Terminal/report delivery", "Final Code Review"],
+        "final_review": {
+            "phase": "Final Code Review",
+            "kind": "code-design-contract-review",
+            "action_classes": ["code-design-contract-review"],
+            "mapping_refs": [mapping["id"] for mapping in mappings],
+            "traceability_refs": [
+                ref for mapping in mappings for ref in mapping["traceability_refs"]
+            ],
+            "scopes": [
+                "implementation-conformance",
+                "x2b-blockers-and-plan-drift",
+                FINAL_REVIEW_SCOPES["UI"],
+            ],
+            "paths": paths,
+        },
+    }
 
 
 def replace_string_values(value, old: str, new: str):
@@ -811,34 +927,6 @@ class ManifestAndGovernanceTests(unittest.TestCase):
             entries["speckit.plan"]["description"],
         )
 
-    def test_governance_uses_one_authority_and_gate_vocabulary(self) -> None:
-        documents = (read(GOVERNANCE), read(AGENTS), read(CROSS_AGENT))
-        for document in documents:
-            self.assertIn("Spec Kit core", document)
-            self.assertNotIn("implementation-manifest.json", document)
-            self.assertNotIn("worker-result.json", document)
-
-        governance = documents[0]
-        self.assertIn("Authority And Gate Ownership", governance)
-        self.assertIn("Requirement Command Ownership", governance)
-        self.assertIn("X0–X4 Planning Artifact Boundaries", governance)
-        self.assertIn("Tasks As A Pure Plan Mapper", governance)
-        self.assertIn("Analyze Cross-Command Audit", governance)
-        self.assertIn("Source Reference Contract", governance)
-        self.assertIn("Clarify -> Checklist -> Clarify", governance)
-        self.assertIn("speckit_requirement_gate_contract.py", governance)
-        self.assertIn(
-            "“Zero Blocker” in Planning Readiness means no `OPEN`",
-            governance,
-        )
-        self.assertIn(
-            "SRC-* -> UI/VIS + Canonical",
-            governance,
-        )
-        self.assertIn(
-            "X2B-* delivery mappings + UIF source_refs/requirement_refs",
-            governance,
-        )
 
     def test_source_contract_adds_no_intake_or_transfer_runtime(self) -> None:
         for path in (
@@ -2513,138 +2601,10 @@ class PlanContractTests(unittest.TestCase):
         self.assertIn("validates Plan outputs only", command)
         self.assertNotIn("Architecture Conformance Gate", command)
 
-    def test_plan_has_deterministic_gates_reconciliation_and_resume(self) -> None:
-        command = read(COMMANDS / "speckit.plan.md")
-        for term in (
-            "Deterministic Execution Spine",
-            "Entry conditions",
-            "Bounded reads",
-            "Owned writes",
-            "Failure handling",
-            "Ownership And Conditional Artifact Decisions",
-            "X2 — Cross-Lane Reconciliation",
-            "X2_RECONCILIATION_READY",
-            "Continuation And Resume",
-            "first Gate whose evidence is absent",
-            "never unconditionally overwrite",
-            "Derive `PLAN_OUTPUT_READY`",
-        ):
-            self.assertIn(term, command)
-        for work_unit_field in (
-            "assigned_scope",
-            "allowed_reads",
-            "allowed_writes",
-            "required_outputs",
-            "validation_gate",
-            "blockers",
-            "context_gaps",
-        ):
-            self.assertIn(work_unit_field, command)
-        for issue_46_term in (
-            "Consumed Spec SHA-256",
-            "PLAN_SPEC_INPUT_STALE",
-            "reference-only Spec UI Input Inventory",
-            "general UI mappings",
-            "pixel-target mappings",
-            "platform-adaptation mappings",
-            "every applicable `PXT-*` and `ADP-*`",
-            "never relabeled N/A",
-        ):
-            self.assertIn(issue_46_term, command)
 
-    def test_plan_conditional_decision_table_covers_contextual_outputs(self) -> None:
-        command = read(COMMANDS / "speckit.plan.md")
-        for term in (
-            "`class-diagram.md`",
-            "`contracts/sequences.md`",
-            "X2-B + `ui-ux-design.md`/UIF",
-            "BDD/scenario child",
-            "fixture child",
-            "assertion child",
-            "never infer N/A merely because an artifact is absent",
-        ):
-            self.assertIn(term, command)
 
-    def test_plan_x2b_uses_stable_ui_consumption_failure_codes(self) -> None:
-        command = read(COMMANDS / "speckit.plan.md")
-        validator = read(VALIDATORS / "speckit_plan_contract.py")
-        for code in (
-            "PLAN_SPEC_INPUT_STALE",
-            "X2B_SPEC_REF_UNMAPPED",
-            "X2B_SPEC_REF_DUPLICATE",
-            "X2B_SPEC_REF_UNKNOWN",
-            "X2B_PIXEL_TARGET_UNMAPPED",
-            "X2B_PIXEL_EXCEPTION_UNRESOLVED",
-            "X2B_ADAPTATION_UNMAPPED",
-            "X2B_BLOCKER_SUPPRESSED",
-            "X2B_SPEC_OWNERSHIP_LEAK",
-            "X2B_DELIVERY_DECISION_INCOMPLETE",
-        ):
-            self.assertIn(code, command)
-            self.assertIn(code, validator)
 
-    def test_plan_control_template_has_lanes_navigation_and_closeout(self) -> None:
-        template = read(TEMPLATES / "plan-template.md")
-        for term in (
-            "X0 Feature Plan Control",
-            "Active Lane Matrix",
-            "Cross-Lane Dependency Register",
-            "Internal Gate Summary",
-            "Artifact Navigation",
-            "Design Object Derivation Index",
-            "X4 Closeout Summary",
-            "PLAN_OUTPUT_READY",
-            "X2 Cross-Lane Reconciliation",
-            "Resume Checkpoint",
-        ):
-            self.assertIn(term, template)
-        self.assertIn("Repository Topology", template)
-        self.assertIn("No task IDs, exact per-task paths", template)
-        self.assertIn("Consumed Spec SHA-256", template)
-        self.assertIn("Current local Spec SHA-256", template)
-        self.assertIn("Invalidate affected X2-B", template)
 
-    def test_plan_artifact_templates_have_non_overlapping_ownership(self) -> None:
-        class_template = read(TEMPLATES / "class-diagram-template.md")
-        sequence_template = read(TEMPLATES / "sequences-template.md")
-        ui_template = read(TEMPLATES / "ui-ux-design-template.md")
-        quickstart = read(TEMPLATES / "quickstart-template.md")
-        readiness = read(TEMPLATES / "test-readiness-template.md")
-
-        self.assertIn("Do not copy complete domain fields", class_template)
-        self.assertIn("Rollback / compensation", sequence_template)
-        self.assertIn("X4 UI/UX Delivery Readiness", ui_template)
-        self.assertIn("Pixel delivery/review is owned here", ui_template)
-        self.assertIn("SRC + UI/VIS refs", ui_template)
-        self.assertIn("does not dereference", ui_template)
-        for issue_46_term in (
-            "Consumed Spec SHA-256",
-            "Spec UI Input Inventory",
-            "General UI Delivery Mappings",
-            "Pixel-Target Delivery Mappings",
-            "Platform-Adaptation Delivery Mappings",
-            "X2B-UI-001",
-            "X2B-PX-001",
-            "X2B-ADP-001",
-            "does not copy requirement statements",
-            "must not repeat or weaken those values",
-            "Every required `X2B-*` mapping has exactly one closed row",
-        ):
-            self.assertIn(issue_46_term, ui_template)
-        self.assertIn("### VAL-001", quickstart)
-        self.assertIn("Cleanup/reset", quickstart)
-        self.assertIn("Every required `TC-*` has exactly one row", readiness)
-        self.assertIn("MUST NOT appear", readiness)
-        readiness_table = [
-            line for line in readiness.splitlines() if line.startswith("| TC ID")
-        ][0]
-        readiness_separator = [
-            line for line in readiness.splitlines() if line.startswith("|---")
-        ][0]
-        self.assertEqual(
-            readiness_table.count("|"),
-            readiness_separator.count("|"),
-        )
 
     def test_removed_behavior_parents_are_not_packaged(self) -> None:
         for path in (
@@ -2658,18 +2618,8 @@ class PlanContractTests(unittest.TestCase):
 
 
 class PlanBundleSemanticTests(unittest.TestCase):
-    def test_four_representative_plan_bundles_are_closed(self) -> None:
-        fixtures = sorted(PLAN_BUNDLE_FIXTURES.glob("*.json"))
-        self.assertEqual(
-            {
-                "async_retry_compensation.json",
-                "minimal_repository.json",
-                "non_ui_single_interface.json",
-                "ui_only.json",
-            },
-            {path.name for path in fixtures},
-        )
-        for fixture in fixtures:
+    def test_representative_closed_plan_bundles_are_valid(self) -> None:
+        for fixture in sorted(PLAN_BUNDLE_FIXTURES.glob("*.json")):
             with self.subTest(bundle=fixture.name):
                 validate_plan_artifact_bundle(load_json(fixture))
 
@@ -2956,34 +2906,7 @@ class PlanBundleSemanticTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "test readiness TC mismatch"):
             validate_plan_artifact_bundle(bundle)
 
-    def test_blocked_test_readiness_row_blocks_plan_output(self) -> None:
-        bundle = load_json(PLAN_BUNDLE_FIXTURES / "non_ui_single_interface.json")
-        bundle["test_readiness_rows"][0] = {
-            "tc_id": "TC-001",
-            "status": "BLOCKED",
-            "blocker": "BLK-TEST-ENV-001",
-        }
-        bundle["reconciliation"]["blocker_owners"] = {
-            "BLK-TEST-ENV-001": "X4"
-        }
-        with self.assertRaisesRegex(ValueError, "PLAN_OUTPUT_READY is inconsistent"):
-            validate_plan_artifact_bundle(bundle)
 
-        bundle["plan_output_ready"] = "BLOCKED"
-        validate_plan_artifact_bundle(bundle)
-
-    def test_blocked_test_condition_blocks_plan_output(self) -> None:
-        bundle = load_json(PLAN_BUNDLE_FIXTURES / "non_ui_single_interface.json")
-        condition = bundle["test_conditions"]["conditions"][0]
-        condition["status"] = "blocked"
-        condition["blocker"] = "BLK-TC-001"
-        bundle["test_readiness_rows"] = []
-        bundle["reconciliation"]["blocker_owners"] = {"BLK-TC-001": "X2-C"}
-        with self.assertRaisesRegex(ValueError, "PLAN_OUTPUT_READY is inconsistent"):
-            validate_plan_artifact_bundle(bundle)
-
-        bundle["plan_output_ready"] = "BLOCKED"
-        validate_plan_artifact_bundle(bundle)
 
     def test_plan_bundle_allows_blocked_x2b_without_relabeling_it_n_a(self) -> None:
         bundle = load_json(PLAN_BUNDLE_FIXTURES / "ui_only.json")
@@ -3014,38 +2937,6 @@ class PlanBundleSemanticTests(unittest.TestCase):
         bundle["plan_output_ready"] = "BLOCKED"
         validate_plan_artifact_bundle(bundle)
 
-    def test_blocked_x2c_preserves_unaffected_required_outputs(self) -> None:
-        bundle = load_json(PLAN_BUNDLE_FIXTURES / "non_ui_single_interface.json")
-        bundle["lanes"]["X2-C"] = {
-            "status": "Blocked",
-            "blocker": "BLK-X2C-001",
-        }
-        readiness = next(
-            artifact
-            for artifact in bundle["artifacts"]
-            if artifact["path"] == "test-readiness.md"
-        )
-        readiness.clear()
-        readiness.update(
-            {
-                "path": "test-readiness.md",
-                "decision": "Blocked",
-                "owner": "X4",
-                "blocker": "BLK-READINESS-001",
-            }
-        )
-        bundle["test_readiness_rows"] = []
-        bundle["gates"]["X2C_TEST_DESIGN_READY"] = {
-            "status": "BLOCKED",
-            "evidence": ["BLK-X2C-001"],
-            "blockers": ["BLK-X2C-001"],
-        }
-        bundle["reconciliation"]["blocker_owners"] = {
-            "BLK-X2C-001": "X2-C",
-            "BLK-READINESS-001": "X4",
-        }
-        bundle["plan_output_ready"] = "BLOCKED"
-        validate_plan_artifact_bundle(bundle)
 
     def test_required_x2a_allows_pure_domain_design_without_interface(self) -> None:
         bundle = load_json(PLAN_BUNDLE_FIXTURES / "minimal_repository.json")
@@ -3133,6 +3024,395 @@ class PlanBundleSemanticTests(unittest.TestCase):
             "PLAN_OUTPUT_READY must be READY or BLOCKED",
         ):
             validate_plan_artifact_bundle(bundle)
+
+
+class NonGraphicalUXContractTests(unittest.TestCase):
+    def validate_uif(self, uif: dict) -> None:
+        validate_behavior_contract_bundle(
+            {
+                "scenarios": [{
+                    "id": "SCN-TERMINAL",
+                    "type": "positive",
+                    "test_condition_refs": ["TC-CONSOLE"],
+                    "no_fixture_rationale": "Operator input is self-contained.",
+                    "uif_path_id": uif["id"],
+                    "assertion_ids": ["AST-001"],
+                }]
+            },
+            {"fixtures": []},
+            minimal_assertions(),
+            [uif],
+            {"TC-CONSOLE"},
+        )
+
+    def test_terminal_report_plan_schema_behavior_and_tasks_close_without_gui(self) -> None:
+        plan = non_graphical_plan_bundle()
+        validator = Draft202012Validator(
+            load_json(SCHEMAS / "speckit.behavior.uif.expected.v1.schema.json")
+        )
+        for uif in plan["uif_contracts"]:
+            with self.subTest(uif=uif["id"]):
+                validator.validate(uif)
+                self.validate_uif(uif)
+        validate_plan_artifact_bundle(plan)
+        tasks = non_graphical_tasks_bundle(plan)
+        validate_tasks_x2b_derivation(tasks)
+        self.assertEqual(
+            {"UX-001", "UX-002"},
+            {ref for task in tasks["tasks"] for ref in task["traceability_refs"]},
+        )
+        self.assertEqual(
+            {"UI-001", "VIS-001"},
+            {
+                row["spec_ref"] for row in plan["x2b_input_inventory"]
+                if row["x2b_applicability"] == "N/A" and not row.get("mapping_ref")
+            },
+        )
+
+    def test_uif_discriminator_and_requirement_ownership_are_not_interchangeable(self) -> None:
+        validator = Draft202012Validator(
+            load_json(SCHEMAS / "speckit.behavior.uif.expected.v1.schema.json")
+        )
+        for kind in (None, "graphical", "terminal", "", [], {}, False):
+            with self.subTest(kind=kind):
+                uif = non_graphical_plan_bundle()["uif_contracts"][0]
+                if kind is None:
+                    del uif["delivery_kind"]
+                else:
+                    uif["delivery_kind"] = kind
+                with self.assertRaises(ValidationError):
+                    validator.validate(uif)
+                with self.assertRaises(ValueError):
+                    self.validate_uif(uif)
+        for refs in (["UI-001"], ["UX-001", "VIS-001"], []):
+            with self.subTest(refs=refs):
+                uif = non_graphical_plan_bundle()["uif_contracts"][0]
+                uif["requirement_refs"] = refs
+                with self.assertRaises(ValidationError):
+                    validator.validate(uif)
+                with self.assertRaises(ValueError):
+                    self.validate_uif(uif)
+        graphical = minimal_uif()
+        validator.validate(graphical)
+        self.validate_uif(graphical)
+        graphical["delivery_kind"] = "graphical"
+        validator.validate(graphical)
+        self.validate_uif(graphical)
+        graphical["requirement_refs"] = ["UX-001"]
+        with self.assertRaises(ValidationError):
+            validator.validate(graphical)
+        with self.assertRaises(ValueError):
+            self.validate_uif(graphical)
+
+    def test_non_graphical_uif_keeps_step_and_visual_boundaries(self) -> None:
+        validator = Draft202012Validator(
+            load_json(SCHEMAS / "speckit.behavior.uif.expected.v1.schema.json")
+        )
+        for field in (
+            "visual_item_refs", "viewport_matrix_refs", "state_matrix_refs",
+            "visual_proof_refs", "accepted_exception_refs",
+        ):
+            with self.subTest(field=field):
+                uif = non_graphical_plan_bundle()["uif_contracts"][0]
+                uif[field] = []
+                validator.validate(uif)
+                self.validate_uif(uif)
+                uif[field] = ["VIS-001"]
+                with self.assertRaises(ValidationError):
+                    validator.validate(uif)
+                with self.assertRaisesRegex(ValueError, "non_graphical invents"):
+                    self.validate_uif(uif)
+        for step in ({"type": "api_call"}, {"type": "local_route"}, {"type": "user_event"}):
+            with self.subTest(step=step):
+                uif = non_graphical_plan_bundle()["uif_contracts"][0]
+                uif["steps"] = [step]
+                with self.assertRaises(ValidationError):
+                    validator.validate(uif)
+                with self.assertRaises(ValueError):
+                    self.validate_uif(uif)
+        uif = non_graphical_plan_bundle()["uif_contracts"][0]
+        uif["canonical_bindings"] = {"UIC-INVENTED": {"target": "terminal"}}
+        with self.assertRaises(ValidationError):
+            validator.validate(uif)
+        with self.assertRaisesRegex(ValueError, "non_graphical invents"):
+            self.validate_uif(uif)
+
+    def test_mapping_requires_explicit_kind_and_matching_ux_uif_ownership(self) -> None:
+        for kind in (None, "graphical", "terminal", [], {}, False):
+            with self.subTest(kind=kind):
+                plan = non_graphical_plan_bundle()
+                mapping = plan["x2b_delivery_mappings"][0]
+                if kind is None:
+                    del mapping["delivery_kind"]
+                else:
+                    mapping["delivery_kind"] = kind
+                with self.assertRaisesRegex(ValueError, "X2B_DELIVERY_DECISION_INCOMPLETE"):
+                    validate_plan_artifact_bundle(plan)
+        for uif_refs in ([], ["UIF-REPORT"]):
+            with self.subTest(uif_refs=uif_refs):
+                plan = non_graphical_plan_bundle()
+                plan["x2b_delivery_mappings"][0]["uif_refs"] = uif_refs
+                with self.assertRaisesRegex(
+                    ValueError, "X2B_(DELIVERY_DECISION_INCOMPLETE|SPEC_REF_UNMAPPED)"
+                ):
+                    validate_plan_artifact_bundle(plan)
+        plan = non_graphical_plan_bundle()
+        plan["uif_contracts"][0]["delivery_kind"] = "graphical"
+        plan["uif_contracts"][0]["requirement_refs"] = ["UI-001"]
+        with self.assertRaisesRegex(ValueError, "delivery_kind differs"):
+            validate_plan_artifact_bundle(plan)
+        for index in (1, 2):
+            with self.subTest(mapping_index=index):
+                plan = load_json(PLAN_BUNDLE_FIXTURES / "ui_only.json")
+                plan["x2b_delivery_mappings"][index]["delivery_kind"] = "non_graphical"
+                with self.assertRaisesRegex(ValueError, "invalid delivery_kind"):
+                    validate_plan_artifact_bundle(plan)
+
+    def test_one_non_graphical_mapping_can_bind_multiple_matching_uifs(self) -> None:
+        plan = non_graphical_plan_bundle()
+        console, report = plan["x2b_delivery_mappings"]
+        for field in ("spec_refs", "source_refs", "decision_refs", "uif_refs", "interface_refs"):
+            console[field].extend(report[field])
+        plan["x2b_delivery_mappings"] = [console]
+        plan["uiux_readiness_rows"] = plan["uiux_readiness_rows"][:1]
+        plan["x2b_input_inventory"][1]["mapping_ref"] = console["id"]
+        plan["decisions"][1]["affected_refs"].remove(report["id"])
+        plan["reconciliation"]["resolved_refs"].remove(report["id"])
+        validate_plan_artifact_bundle(plan)
+
+    def test_non_graphical_mapping_preserves_exclusions_and_canonical_boundaries(self) -> None:
+        for ref in ("UI-001", "VIS-001"):
+            with self.subTest(ref=ref):
+                plan = non_graphical_plan_bundle()
+                plan["x2b_delivery_mappings"][0]["spec_refs"].append(ref)
+                with self.assertRaisesRegex(ValueError, "N/A was mapped as delivery"):
+                    validate_plan_artifact_bundle(plan)
+        plan = non_graphical_plan_bundle()
+        plan["spec_input"]["ui_contract_refs"][2]["status"] = "specified"
+        plan["x2b_input_inventory"][2] = {
+            "spec_ref": "UI-001", "contract_class": "UI", "spec_status": "specified",
+            "x2b_applicability": "Required", "mapping_ref": "X2B-UI-CONSOLE",
+        }
+        plan["x2b_delivery_mappings"][0]["spec_refs"].append("UI-001")
+        with self.assertRaisesRegex(ValueError, "general mapping has non-general Spec ref"):
+            validate_plan_artifact_bundle(plan)
+        plan = non_graphical_plan_bundle()
+        plan["x2b_delivery_mappings"][0]["canonical_bindings"] = {
+            "UIC-INVENTED": {"target": "terminal", "requirement_refs": ["UX-001"]}
+        }
+        with self.assertRaisesRegex(ValueError, "X2B_CANONICAL_MAPPING_INCOMPLETE"):
+            validate_plan_artifact_bundle(plan)
+        plan = non_graphical_plan_bundle()
+        plan["x2b_delivery_mappings"][0]["visual_item_refs"] = ["VIS-001"]
+        with self.assertRaisesRegex(ValueError, "non_graphical invents"):
+            validate_plan_artifact_bundle(plan)
+
+    def test_non_graphical_mapping_keeps_source_digest_and_spec_ownership_strict(self) -> None:
+        for field in ("spec_refs", "source_refs", "uif_refs"):
+            with self.subTest(field=field):
+                plan = non_graphical_plan_bundle()
+                plan["x2b_delivery_mappings"][0][field].append("UNKNOWN-404")
+                with self.assertRaisesRegex(ValueError, "X2B_SPEC_REF_UNKNOWN"):
+                    validate_plan_artifact_bundle(plan)
+        plan = non_graphical_plan_bundle()
+        plan["uif_contracts"][0]["requirement_refs"] = ["UX-404"]
+        with self.assertRaisesRegex(ValueError, "X2B_SPEC_REF_UNKNOWN"):
+            validate_plan_artifact_bundle(plan)
+        plan = non_graphical_plan_bundle()
+        plan["uif_contracts"][0]["source_refs"] = ["SRC-EVALUATION"]
+        with self.assertRaisesRegex(ValueError, "omits a requirement SRC ref"):
+            validate_plan_artifact_bundle(plan)
+        plan = non_graphical_plan_bundle()
+        plan["uif_contracts"][0]["source_refs"].append("SRC-UNKNOWN")
+        with self.assertRaisesRegex(ValueError, "X2B_SPEC_REF_UNKNOWN"):
+            validate_plan_artifact_bundle(plan)
+        plan = blocked_non_graphical_plan_bundle()
+        plan["spec_input"]["ui_contract_refs"][0].update(
+            status="BLOCKED", blocker="BLK-CONSOLE-DELIVERY"
+        )
+        plan["x2b_input_inventory"][0] = {
+            "spec_ref": "UX-001", "contract_class": "UX", "spec_status": "BLOCKED",
+            "x2b_applicability": "Blocked", "propagated_blocker": "BLK-CONSOLE-DELIVERY",
+        }
+        with self.assertRaisesRegex(ValueError, "owns inapplicable UX-001"):
+            validate_plan_artifact_bundle(plan)
+        plan = non_graphical_plan_bundle()
+        plan["spec_input"]["recorded_uiux_sha256"] = f"sha256:{'a' * 64}"
+        with self.assertRaisesRegex(ValueError, "PLAN_SPEC_INPUT_STALE"):
+            validate_plan_artifact_bundle(plan)
+        plan = non_graphical_plan_bundle()
+        plan["x2b_delivery_mappings"][0]["statement"] = "Copied product requirement"
+        with self.assertRaisesRegex(ValueError, "X2B_SPEC_OWNERSHIP_LEAK"):
+            validate_plan_artifact_bundle(plan)
+
+    def test_required_x2c_design_survives_root_blocked_x3_and_final_handoff(self) -> None:
+        blocked = blocked_non_graphical_plan_bundle()
+        validate_plan_artifact_bundle(blocked)
+        self.assertEqual("Required", blocked["lanes"]["X2-C"]["status"])
+        self.assertEqual("READY", blocked["gates"]["X2C_TEST_DESIGN_READY"]["status"])
+        self.assertEqual("X2-B", next(iter(blocked["reconciliation"]["blocker_owners"].values())))
+        with self.assertRaisesRegex(ValueError, "PLAN_OUTPUT_INCOMPLETE"):
+            validate_tasks_x2b_derivation(non_graphical_tasks_bundle(blocked))
+        readiness = next(
+            artifact for artifact in blocked["artifacts"] if artifact["path"] == "test-readiness.md"
+        )
+        readiness.clear()
+        readiness.update(
+            path="test-readiness.md", decision="Blocked", owner="X4",
+            blocker="BLK-CONSOLE-DELIVERY",
+        )
+        blocked["test_readiness_rows"] = []
+        validate_plan_artifact_bundle(blocked)
+        ready = non_graphical_plan_bundle()
+        self.assertEqual(
+            [condition["id"] for condition in blocked["test_conditions"]["conditions"]],
+            [condition["id"] for condition in ready["test_conditions"]["conditions"]],
+        )
+        validate_plan_artifact_bundle(ready)
+        validate_tasks_x2b_derivation(non_graphical_tasks_bundle(ready))
+
+    def test_propagated_root_cannot_be_hidden_unregistered_or_reassigned(self) -> None:
+        for owner in (None, "", "X3"):
+            with self.subTest(owner=owner):
+                plan = blocked_non_graphical_plan_bundle()
+                if owner is None:
+                    plan["reconciliation"]["blocker_owners"] = {}
+                else:
+                    plan["reconciliation"]["blocker_owners"]["BLK-CONSOLE-DELIVERY"] = owner
+                with self.assertRaisesRegex(ValueError, "owner|owning lane"):
+                    validate_plan_artifact_bundle(plan)
+        for gate in ("X3_VALIDATION_PATHS_READY", "X2_RECONCILIATION_READY"):
+            with self.subTest(gate=gate):
+                plan = blocked_non_graphical_plan_bundle()
+                plan["reconciliation"]["blocker_owners"]["BLK-OTHER"] = "X3"
+                plan["gates"][gate]["blockers"] = ["BLK-OTHER"]
+                with self.assertRaisesRegex(ValueError, "blocker absent from dependent Gate"):
+                    validate_plan_artifact_bundle(plan)
+                plan["gates"][gate] = {"status": "READY", "evidence": ["independent design"]}
+                with self.assertRaisesRegex(ValueError, "blocker absent from dependent Gate"):
+                    validate_plan_artifact_bundle(plan)
+
+    def test_partial_bundle_requires_real_paths_or_visible_x3_blockers(self) -> None:
+        plan = non_graphical_plan_bundle()
+        plan["validation_paths"] = []
+        with self.assertRaisesRegex(ValueError, "required quickstart missing VAL paths"):
+            validate_plan_artifact_bundle(plan)
+        plan = blocked_non_graphical_plan_bundle()
+        plan["artifacts"] = [
+            artifact for artifact in plan["artifacts"] if artifact["path"] != "quickstart.md"
+        ]
+        with self.assertRaisesRegex(ValueError, "missing required output: quickstart.md"):
+            validate_plan_artifact_bundle(plan)
+        plan = blocked_non_graphical_plan_bundle()
+        quickstart = next(
+            artifact for artifact in plan["artifacts"] if artifact["path"] == "quickstart.md"
+        )
+        quickstart["owner"] = "X2-C"
+        with self.assertRaisesRegex(ValueError, "incorrect stage owner"):
+            validate_plan_artifact_bundle(plan)
+        plan = blocked_non_graphical_plan_bundle()
+        del plan["test_conditions"]["conditions"][0]["x3_blocker"]
+        with self.assertRaisesRegex(ValueError, "exactly one quickstart_ref or x3_blocker"):
+            validate_plan_artifact_bundle(plan)
+        plan = blocked_non_graphical_plan_bundle()
+        plan["test_readiness_rows"][0] = {
+            "tc_id": "TC-CONSOLE", "status": "READY", "evidence": "conditions independently complete"
+        }
+        with self.assertRaisesRegex(ValueError, "Test Readiness hides X3 blocker"):
+            validate_plan_artifact_bundle(plan)
+        plan = blocked_non_graphical_plan_bundle()
+        plan["plan_output_ready"] = "READY"
+        with self.assertRaisesRegex(ValueError, "PLAN_OUTPUT_READY is inconsistent"):
+            validate_plan_artifact_bundle(plan)
+
+    def test_blocked_design_and_readiness_rows_require_their_own_gate_evidence(self) -> None:
+        plan = non_graphical_plan_bundle()
+        condition = plan["test_conditions"]["conditions"][0]
+        condition.update(status="blocked", blocker="BLK-TEST-DESIGN")
+        plan["test_readiness_rows"] = plan["test_readiness_rows"][1:]
+        plan["reconciliation"]["blocker_owners"] = {"BLK-TEST-DESIGN": "X2-C"}
+        plan["plan_output_ready"] = "BLOCKED"
+        with self.assertRaisesRegex(ValueError, "blocker absent from dependent Gate"):
+            validate_plan_artifact_bundle(plan)
+        plan["lanes"]["X2-C"] = {"status": "Blocked", "blocker": "BLK-TEST-DESIGN"}
+        plan["gates"]["X2C_TEST_DESIGN_READY"] = {
+            "status": "BLOCKED", "evidence": ["contracts/test/test-conditions.json#TC-CONSOLE"],
+            "blockers": ["BLK-TEST-DESIGN"],
+        }
+        validate_plan_artifact_bundle(plan)
+        plan = non_graphical_plan_bundle()
+        plan["test_readiness_rows"][0] = {
+            "tc_id": "TC-CONSOLE", "status": "BLOCKED", "blocker": "BLK-HANDOFF"
+        }
+        plan["reconciliation"]["blocker_owners"] = {"BLK-HANDOFF": "X4"}
+        plan["plan_output_ready"] = "BLOCKED"
+        with self.assertRaisesRegex(ValueError, "blocker absent from dependent Gate"):
+            validate_plan_artifact_bundle(plan)
+        plan["gates"]["X2_RECONCILIATION_READY"] = {
+            "status": "BLOCKED", "evidence": ["test-readiness.md#TC-CONSOLE"],
+            "blockers": ["BLK-HANDOFF"],
+        }
+        validate_plan_artifact_bundle(plan)
+
+    def test_tasks_non_graphical_kind_traceability_and_final_review_are_strict(self) -> None:
+        for kind in (None, "graphical", "terminal", [], {}, False):
+            with self.subTest(kind=kind):
+                tasks = non_graphical_tasks_bundle()
+                if kind is None:
+                    del tasks["x2b_mappings"][0]["delivery_kind"]
+                else:
+                    tasks["x2b_mappings"][0]["delivery_kind"] = kind
+                with self.assertRaisesRegex(ValueError, "TASK_X2B_REF_UNKNOWN"):
+                    validate_tasks_x2b_derivation(tasks)
+        tasks = non_graphical_tasks_bundle()
+        tasks["x2b_mappings"][0]["traceability_refs"].append("UI-001")
+        with self.assertRaisesRegex(ValueError, "TASK_X2B_REF_UNKNOWN"):
+            validate_tasks_x2b_derivation(tasks)
+        tasks = non_graphical_tasks_bundle()
+        tasks["tasks"][0]["traceability_refs"] = []
+        with self.assertRaisesRegex(ValueError, "tasks omit UX-001"):
+            validate_tasks_x2b_derivation(tasks)
+        tasks = non_graphical_tasks_bundle()
+        tasks["final_review"]["traceability_refs"].remove("UX-002")
+        with self.assertRaisesRegex(ValueError, "TASK_FINAL_REVIEW_MAPPING_MISSING"):
+            validate_tasks_x2b_derivation(tasks)
+        tasks = non_graphical_tasks_bundle()
+        tasks["declared_traceability_refs"].remove("UX-001")
+        with self.assertRaisesRegex(ValueError, "TASK_X2B_REF_UNKNOWN"):
+            validate_tasks_x2b_derivation(tasks)
+        tasks = non_graphical_tasks_bundle()
+        tasks["tasks"][0]["description"] = "Capture screenshot evidence"
+        with self.assertRaisesRegex(ValueError, "TASK_VISUAL_EXECUTION_LEAK"):
+            validate_tasks_x2b_derivation(tasks)
+
+    def test_analyze_audits_applicable_ux_pairs_without_weakening_visual_roles(self) -> None:
+        snapshot = source_contract_snapshot()
+        source = snapshot["spec"]["sources"][0]
+        snapshot["spec"]["requirement_refs"].append("UX-001")
+        source["projected_refs"].append("UX-001")
+        source["uif_required"] = True
+        findings = audit_source_reference_contract(snapshot)
+        self.assertEqual(
+            {"SRC_UIUX_MAPPING_MISSING", "SRC_UIF_MAPPING_MISSING"},
+            {finding["code"] for finding in findings},
+        )
+        pair = {"source_ref": source["ref"], "requirement_ref": "UX-001"}
+        snapshot["plan"]["ui_ux_mappings"].append(pair)
+        self.assertEqual(
+            {"SRC_UIF_MAPPING_MISSING"},
+            {finding["code"] for finding in audit_source_reference_contract(snapshot)},
+        )
+        snapshot["plan"]["uif_mappings"].append(dict(pair))
+        self.assertEqual([], audit_source_reference_contract(snapshot))
+        snapshot["plan"]["ui_ux_mappings"].pop()
+        snapshot["plan"]["uif_mappings"].pop()
+        source["ui_ux_applicable"] = False
+        self.assertEqual([], audit_source_reference_contract(snapshot))
+        source["role"] = "visual-input"
+        self.assertIn(
+            "SRC_ROLE_PROJECTION_INVALID",
+            {finding["code"] for finding in audit_source_reference_contract(snapshot)},
+        )
 
 
 class SchemaAndValidatorTests(unittest.TestCase):
@@ -3372,44 +3652,7 @@ class TasksAndAnalyzeTests(unittest.TestCase):
         codes = {item["code"] for item in audit_canonical_ui_chain(missing_review)}
         self.assertIn("FINAL_REVIEW_CANONICAL_REF_MISSING", codes)
 
-    def test_tasks_is_pure_plan_mapper_and_required_tc_overrides_core_optional(self) -> None:
-        command = read(COMMANDS / "speckit.tasks.md")
-        for stage in (
-            "T0 — Plan Handoff Preflight",
-            "T1 — Concrete Path Binding",
-            "T2 — Dependency Graph",
-            "T3 — Story / Capability Derivation",
-            "T4 — Functional Validation And Evidence",
-            "T5 — Final Code Review",
-        ):
-            self.assertIn(stage, command)
-        self.assertIn("Tasks MUST NOT drop", command)
-        self.assertIn("tests are optional", command)
-        self.assertIn("PLAN_OUTPUT_INCOMPLETE", command)
-        self.assertIn("Exact paths are a Tasks output", command)
-        self.assertIn("Spec/Checklist as direct\nstrategy inputs", command)
 
-    def test_tasks_forbids_pixel_work_and_keeps_final_review_last(self) -> None:
-        command = read(COMMANDS / "speckit.tasks.md")
-        self.assertIn("Never generate", command)
-        for forbidden_task in (
-            "visual_acceptance",
-            "pixel_fidelity_review",
-            "screenshot comparison",
-            "visual diff",
-            "baseline capture",
-            "visual restoration",
-            "final visual review",
-            "pixel-level layout/style assertions",
-            "screenshot-based evidence",
-            "source dereference",
-            "external-source validation",
-            "provider-tool",
-        ):
-            self.assertIn(forbidden_task, command)
-        self.assertIn("append the final phase after user-story tasks", command)
-        self.assertIn("no phase may follow it", command)
-        self.assertIn("MUST NOT\njudge rendered visual fidelity", command)
 
     def test_tasks_x2b_complete_bundle_maps_all_classes_once(self) -> None:
         bundle = minimal_tasks_x2b_bundle()

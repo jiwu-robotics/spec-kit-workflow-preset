@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Added explicit `non_graphical` delivery to existing general UI/UX mappings
+  and Expected UIF contracts for terminal/report `UX-*` requirements, without
+  inventing Canonical UI objects or weakening graphical ownership.
+- Preserved unmapped UI/VIS N/A inputs, current Spec digests, matching UIF
+  ownership/source coverage, and nongraphical Tasks/Final Code Review refs.
+- Separated X2-C condition design, X3 validation paths, and X4 final readiness;
+  propagated blockers retain their registered root owner and require explicit
+  dependent-gate evidence before any final readiness claim.
+- Extended the local source audit to UX delivery pairs and synchronized the
+  maintained Plan/Tasks commands and installed integration projections.
+- Replaced affected prose-copy and incidental preset-default assertions with
+  semantic acceptance, boundary, and stage-lifecycle regression coverage.
+
 - Required Core `setup-plan` path-only preflight to reject unsupported flags or
   any write to feature metadata, directories, or `plan.md` before the
   Requirement Gate passes.

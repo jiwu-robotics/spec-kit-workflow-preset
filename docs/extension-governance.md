@@ -109,6 +109,15 @@ spec.md with stable semantic refs
     -> core /speckit.implement execution
 ```
 
+Stage ownership remains independent: X2-C owns Test Conditions and selected
+technique children, X3 owns Quickstart paths, and X4 derives final Test
+Readiness. A later blocked output preserves complete condition design.
+Propagated blockers retain their registered original owner; the dependent
+Gate must be BLOCKED and explicitly list the root with concrete evidence.
+Quickstart uses `X3_VALIDATION_PATHS_READY`; final readiness uses
+`X2_RECONCILIATION_READY`. Final `PLAN_OUTPUT_READY` requires every applicable
+output, path and readiness row to close.
+
 Tasks maps upstream artifacts into checklist items. It must not create another
 planning system or execution protocol.
 
@@ -223,10 +232,10 @@ Product-facing sources do not become technical decisions automatically.
 
 Plan reads only local Spec, Constitution, Architecture, and current repository
 facts. `SRC-*` locators are provenance, not read or execution targets.
-Applicable visual projection follows:
+Applicable local delivery projection follows:
 
 ```text
-SRC-* -> UI/VIS + Canonical UIP/UIR/UIC/UID/UIS/UIV/UIW/UIT/UIA/UIM/UIE/UIAX/UIN/UIAC
+SRC-* -> UX (non_graphical) or UI/VIS + Canonical UIP/UIR/UIC/UID/UIS/UIV/UIW/UIT/UIA/UIM/UIE/UIAX/UIN/UIAC
   + RST/PXR/PXT/PEX/ADP refs
   -> ui-ux-design.md Spec UI Input Inventory
   -> X2B-* delivery mappings + UIF source_refs/requirement_refs
@@ -331,11 +340,17 @@ invalidates affected X2-B, reconciliation, X4, and `PLAN_OUTPUT_READY`
 evidence.
 
 `ui-ux-design.md` inventories every applicable Canonical ID plus
-`UI/VIS/RST/PXR/PXT/PEX/ADP` ref exactly once, then maps it through stable
+`UX/UI/VIS/RST/PXR/PXT/PEX/ADP` ref exactly once, then maps it through stable
 Plan-owned `X2B-*` records:
 
-- general UI delivery maps UI/visual/restoration refs to regions, components,
-  state, navigation, input, responsive, and accessibility design;
+- general delivery retains the `general-ui` / `X2B-UI-*` family; graphical
+  delivery remains the default and binds UI/visual/restoration refs to regions,
+  components, state, navigation, input, responsive, and accessibility design;
+- explicit `delivery_kind: non_graphical` binds only applicable UX refs to
+  terminal/report destinations, handler/state/feedback ownership and applicable
+  input/readability; UI/VIS N/A rows remain unmapped, and no Canonical or visual
+  bindings are invented. Matching UIFs have the same discriminator, UX-only
+  requirement refs, complete mapped requirement coverage and source provenance;
 - pixel-target delivery maps profile/target/exception refs to target-region,
   style/token/asset/layering/overflow responsibilities and a local X2-B method;
 - platform-adaptation delivery maps one policy/dimension ref to target-context
@@ -349,8 +364,10 @@ the same ID and cannot become `READY` or `N/A`.
 
 Every applicable Canonical ID enters exactly one mapping with one explicit
 target-platform component/API/Theme/resource/adaptation binding and retains its
-owning `UI-*`/`VIS-*` refs. A missing or critical Canonical blocker keeps X2-B
-blocked; X2-B cannot reconstruct design from original `SRC-*` content.
+owning `UI-*`/`VIS-*` refs. Missing or critical applicable graphical Canonical
+inputs keep that delivery blocked, not UX-only non-graphical delivery. Any real
+applicable blocker still prevents readiness; X2-B cannot reconstruct design
+from original `SRC-*` content.
 
 ## Final Code Review Gate
 

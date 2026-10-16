@@ -1,0 +1,175 @@
+{
+  "name": "terminal and evaluation-report UX",
+  "repository_mode": "populated",
+  "lanes": {
+    "X2-A": {"status": "Required"},
+    "X2-B": {"status": "Required"},
+    "X2-C": {"status": "Required"}
+  },
+  "spec_input": {
+    "current_sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "recorded_x0_sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "recorded_uiux_sha256": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+    "ui_contract_refs": [
+      {"ref": "UX-001", "contract_class": "UX", "status": "specified", "source_refs": ["SRC-OPERATOR"]},
+      {"ref": "UX-002", "contract_class": "UX", "status": "specified", "source_refs": ["SRC-EVALUATION"]},
+      {"ref": "UI-001", "contract_class": "UI", "status": "N/A", "source_refs": ["SRC-OPERATOR"], "rationale": "No new graphical interface is in scope."},
+      {"ref": "VIS-001", "contract_class": "VIS", "status": "N/A", "source_refs": ["SRC-EVALUATION"], "rationale": "No rendered visual delivery is in scope."}
+    ]
+  },
+  "x2b_input_inventory": [
+    {"spec_ref": "UX-001", "contract_class": "UX", "spec_status": "specified", "x2b_applicability": "Required", "mapping_ref": "X2B-UI-CONSOLE"},
+    {"spec_ref": "UX-002", "contract_class": "UX", "spec_status": "specified", "x2b_applicability": "Required", "mapping_ref": "X2B-UI-REPORT"},
+    {"spec_ref": "UI-001", "contract_class": "UI", "spec_status": "N/A", "x2b_applicability": "N/A", "reason": "No new graphical interface is in scope."},
+    {"spec_ref": "VIS-001", "contract_class": "VIS", "spec_status": "N/A", "x2b_applicability": "N/A", "reason": "No rendered visual delivery is in scope."}
+  ],
+  "x2b_delivery_mappings": [
+    {
+      "id": "X2B-UI-CONSOLE",
+      "kind": "general-ui",
+      "delivery_kind": "non_graphical",
+      "spec_refs": ["UX-001"],
+      "source_refs": ["SRC-OPERATOR"],
+      "surface_region_binding": "Command input, standard output and standard error channels",
+      "component_delivery": "Configuration resolver owns selected mode and actionable error feedback",
+      "navigation_input_responsive_accessibility": "Explicit command arguments and readable error text; graphical navigation and responsive layout do not apply",
+      "decision_refs": ["DEC-UI-CONSOLE"],
+      "uif_refs": ["UIF-CONSOLE"],
+      "interface_refs": ["IF-CONFIG"],
+      "asset_refs": [],
+      "status": "READY"
+    },
+    {
+      "id": "X2B-UI-REPORT",
+      "kind": "general-ui",
+      "delivery_kind": "non_graphical",
+      "spec_refs": ["UX-002"],
+      "source_refs": ["SRC-EVALUATION"],
+      "surface_region_binding": "Persisted evaluation summary and per-run report records",
+      "component_delivery": "Report writer owns run identity, eligibility state and missing-result explanation",
+      "navigation_input_responsive_accessibility": "Operator reads labeled text and tabular fields; graphical navigation and responsive layout do not apply",
+      "decision_refs": ["DEC-UI-REPORT"],
+      "uif_refs": ["UIF-REPORT"],
+      "interface_refs": ["IF-REPORT"],
+      "asset_refs": [],
+      "status": "READY"
+    }
+  ],
+  "uiux_readiness_rows": [
+    {"mapping_ref": "X2B-UI-CONSOLE", "status": "READY", "evidence": "ui-ux-design.md#X2B-UI-CONSOLE"},
+    {"mapping_ref": "X2B-UI-REPORT", "status": "READY", "evidence": "ui-ux-design.md#X2B-UI-REPORT"}
+  ],
+  "artifacts": [
+    {"path": "plan.md", "decision": "Required", "owner": "X0/X4", "content": "The non-graphical scope and every stage gate are reconciled."},
+    {"path": "research.md", "decision": "Required", "owner": "X1", "content": "Configuration and report delivery decisions are recorded."},
+    {"path": "data-model.md", "decision": "Required", "owner": "X2-A", "content": "Configuration and run-report state are defined."},
+    {"path": "contracts/configuration.json", "decision": "Required", "owner": "X2-A", "content": "Configuration inputs and errors are defined.", "declared_ids": ["IF-CONFIG"]},
+    {"path": "contracts/report.json", "decision": "Required", "owner": "X2-A", "content": "Run identity and eligibility fields are defined.", "declared_ids": ["IF-REPORT"]},
+    {"path": "class-diagram.md", "decision": "N/A", "reason": "Existing handlers retain their object responsibility structure."},
+    {"path": "contracts/sequences.md", "decision": "N/A", "reason": "No cross-boundary ordering changes."},
+    {"path": "ui-ux-design.md", "decision": "Required", "owner": "X2-B", "content": "Console and report delivery bindings preserve graphical exclusions."},
+    {"path": "contracts/uif/console.expected.json", "decision": "Required", "owner": "X2-B", "content": "Operator input and configuration error feedback are defined."},
+    {"path": "contracts/uif/report.expected.json", "decision": "Required", "owner": "X2-B", "content": "Report inspection and missing-result interpretation are defined."},
+    {"path": "contracts/test/test-conditions.json", "decision": "Required", "owner": "X2-C", "content": "Configuration and report acceptance conditions are complete."},
+    {"path": "quickstart.md", "decision": "Required", "owner": "X3", "content": "Executable configuration and report validation paths are defined."},
+    {"path": "test-readiness.md", "decision": "Required", "owner": "X4", "content": "Every required condition has a closed handoff row."}
+  ],
+  "decisions": [
+    {"id": "DEC-UI-CONSOLE", "affected_refs": ["X2B-UI-CONSOLE", "IF-CONFIG", "UIF-CONSOLE", "TC-CONSOLE"]},
+    {"id": "DEC-UI-REPORT", "affected_refs": ["X2B-UI-REPORT", "IF-REPORT", "UIF-REPORT", "TC-REPORT"]}
+  ],
+  "uif_contracts": [
+    {
+      "contract_type": "speckit.behavior.uif.expected.v1",
+      "id": "UIF-CONSOLE",
+      "source": "operator configuration contract",
+      "source_refs": ["SRC-OPERATOR"],
+      "requirement_refs": ["UX-001"],
+      "delivery_kind": "non_graphical",
+      "type": "expected",
+      "start_view": {"id": "CONSOLE-IDLE", "name": "Command input ready"},
+      "steps": [
+        {"id": "SUBMIT-CONFIG", "type": "user_event", "label": "Run with selected configuration"},
+        {"id": "VALIDATE-CONFIG", "type": "system_event", "label": "Resolve mode or return an actionable configuration error"}
+      ],
+      "feedback_candidates": [{"id": "CONFIG-ERROR", "type": "error", "message": "Identify the rejected setting and supported values."}]
+    },
+    {
+      "contract_type": "speckit.behavior.uif.expected.v1",
+      "id": "UIF-REPORT",
+      "source": "evaluation report contract",
+      "source_refs": ["SRC-EVALUATION"],
+      "requirement_refs": ["UX-002"],
+      "delivery_kind": "non_graphical",
+      "type": "expected",
+      "start_view": {"id": "REPORT-AVAILABLE", "name": "Evaluation summary available"},
+      "steps": [
+        {"id": "READ-REPORT", "type": "user_event", "label": "Inspect run identity and eligibility"},
+        {"id": "EXPLAIN-MISSING", "type": "system_event", "label": "Distinguish missing measurements from ineligible runs"}
+      ],
+      "feedback_candidates": [{"id": "MISSING-RESULT", "type": "status", "message": "Show why a run has no comparable result."}]
+    }
+  ],
+  "test_conditions": {
+    "contract_type": "speckit.test.conditions.v1",
+    "feature": "terminal-report-ux",
+    "conditions": [
+      {
+        "id": "TC-CONSOLE",
+        "source_refs": ["UX-001"],
+        "risk_or_priority": "high",
+        "levels": ["contract"],
+        "types": ["functional"],
+        "techniques": ["contract_testing"],
+        "execution_mode": "local",
+        "no_fixture_rationale": "Configuration inputs are self-contained.",
+        "environment_refs": ["ENV-LOCAL"],
+        "oracle": {"kind": "exit_and_feedback", "expected": "Invalid configuration returns an actionable error without silently changing mode."},
+        "evidence_requirement": "Exit status and captured command output",
+        "related_refs": ["IF-CONFIG", "UIF-CONSOLE"],
+        "quickstart_ref": "VAL-CONSOLE",
+        "status": "required"
+      },
+      {
+        "id": "TC-REPORT",
+        "source_refs": ["UX-002"],
+        "risk_or_priority": "high",
+        "levels": ["contract"],
+        "types": ["functional"],
+        "techniques": ["boundary_value"],
+        "execution_mode": "local",
+        "no_fixture_rationale": "A missing measurement is represented by a self-contained report record.",
+        "environment_refs": ["ENV-LOCAL"],
+        "oracle": {"kind": "report_fields", "expected": "Missing measurement remains distinct from run ineligibility and preserves run identity."},
+        "evidence_requirement": "Persisted report field assertions",
+        "related_refs": ["IF-REPORT", "UIF-REPORT"],
+        "quickstart_ref": "VAL-REPORT",
+        "status": "required"
+      }
+    ]
+  },
+  "technique_children": {"bdd": [], "scenario": [], "fixture": [], "assertion": []},
+  "test_readiness_rows": [
+    {"tc_id": "TC-CONSOLE", "status": "READY", "evidence": "quickstart.md#VAL-CONSOLE"},
+    {"tc_id": "TC-REPORT", "status": "READY", "evidence": "quickstart.md#VAL-REPORT"}
+  ],
+  "validation_paths": [
+    {"id": "VAL-CONSOLE", "covered_refs": ["TC-CONSOLE", "IF-CONFIG", "UIF-CONSOLE"]},
+    {"id": "VAL-REPORT", "covered_refs": ["TC-REPORT", "IF-REPORT", "UIF-REPORT"]}
+  ],
+  "reconciliation": {
+    "resolved_refs": ["DEC-UI-CONSOLE", "DEC-UI-REPORT", "IF-CONFIG", "IF-REPORT", "X2B-UI-CONSOLE", "X2B-UI-REPORT", "UIF-CONSOLE", "UIF-REPORT", "TC-CONSOLE", "TC-REPORT", "VAL-CONSOLE", "VAL-REPORT"],
+    "findings": [],
+    "blocker_owners": {}
+  },
+  "gates": {
+    "X0_CONTROL_READY": {"status": "READY", "evidence": ["plan.md#x0-feature-plan-control"]},
+    "X1_DECISIONS_READY": {"status": "READY", "evidence": ["research.md#DEC-UI-CONSOLE", "research.md#DEC-UI-REPORT"]},
+    "X2A_DESIGN_READY": {"status": "READY", "evidence": ["contracts/configuration.json#IF-CONFIG", "contracts/report.json#IF-REPORT"]},
+    "X2B_UIUX_READY": {"status": "READY", "evidence": ["ui-ux-design.md#delivery-readiness"]},
+    "X2C_TEST_DESIGN_READY": {"status": "READY", "evidence": ["contracts/test/test-conditions.json#TC-CONSOLE", "contracts/test/test-conditions.json#TC-REPORT"]},
+    "X2_RECONCILIATION_READY": {"status": "READY", "evidence": ["plan.md#x2-cross-lane-reconciliation"]},
+    "X3_VALIDATION_PATHS_READY": {"status": "READY", "evidence": ["quickstart.md#VAL-CONSOLE", "quickstart.md#VAL-REPORT"]}
+  },
+  "plan_output_ready": "READY"
+}

@@ -36,6 +36,8 @@ NORMATIVE_REQUIREMENT_PREFIXES = (
     "FR-", "NFR-", "UX-", "UI-", "VIS-", *CANONICAL_UI_PREFIXES
 )
 VISUAL_REQUIREMENT_PREFIXES = ("UI-", "VIS-", *CANONICAL_UI_PREFIXES)
+# Operator feedback needs provenance without becoming visual input.
+UIUX_REQUIREMENT_PREFIXES = ("UX-", *VISUAL_REQUIREMENT_PREFIXES)
 SOURCE_ROW_FIELDS = {
     "ref",
     "role",
@@ -362,7 +364,7 @@ def audit_source_reference_contract(
 
         if source.get("ui_ux_applicable", True):
             for projected_ref in normative_refs:
-                if not projected_ref.startswith(VISUAL_REQUIREMENT_PREFIXES):
+                if not projected_ref.startswith(UIUX_REQUIREMENT_PREFIXES):
                     continue
                 pair = (ref, projected_ref)
                 if pair not in ui_ux_mappings:
@@ -371,7 +373,7 @@ def audit_source_reference_contract(
                             "SRC_UIUX_MAPPING_MISSING",
                             source=f"spec.md:{ref}+{projected_ref}",
                             target="ui-ux-design.md",
-                            evidence="applicable source/UI-VIS pair is unmapped",
+                            evidence="applicable source/UX-UI-VIS pair is unmapped",
                             owner="speckit.plan",
                         )
                     )

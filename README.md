@@ -99,7 +99,7 @@ SRC ref | role | opaque locator/description | revision/identity
 ```text
 UIHTML / Figma / 截图 / 产品或用户描述
         ↓ 仅作为 SRC-* 证据
-UI-* / VIS-* + Canonical UI 对象
+UX-*（终端/报告）或 UI-* / VIS-* + Canonical UI 对象
         ↓
 spec.md（本功能 WHAT/WHY SSOT）
         ↓
@@ -131,10 +131,15 @@ BLOCKED 状态；不新增第二份 UI 规格文件。
 
 Plan 在 X0 和 `ui-ux-design.md` 记录同一个本地 `spec.md` SHA-256，用于
 发现 Clarify 造成的同 ID 语义变化。X2-B 只建立引用式 `X2B-*` 交付映射：
-通用 UI 映射、像素目标映射和平台适配映射。它不会复制 Spec 拥有的需求语句、
-基线、视口/状态、保真模式、验收容差、例外边界或适配决策；摘要变化或任何
-Canonical ID 或 `UI/VIS/RST/PXR/PXT/PEX/ADP` 映射缺失都会阻止
+通用 UI/UX 映射、像素目标映射和平台适配映射。它不会复制 Spec 拥有的需求语句、
+基线、视口/状态、保真模式、验收容差、例外边界或适配决策；摘要变化或任何适用的
+Canonical ID 或 `UX/UI/VIS/RST/PXR/PXT/PEX/ADP` 映射缺失都会阻止
 `X2B_UIUX_READY` 和 `PLAN_OUTPUT_READY`。
+
+终端/报告的 `UX-*` 使用现有 `general-ui` / `X2B-UI-*` 家族，但必须显式设置
+`delivery_kind: non_graphical`。UIF 使用相同分类和 UX 引用，覆盖对应映射的需求及
+来源；`UI/VIS` 的 N/A 行仍不映射，不新建 Canonical 对象或视觉引用。省略分类时
+保持原有图形交付语义及 UI/VIS/Canonical 约束。
 
 ### Plan：X0–X4
 
@@ -154,6 +159,10 @@ Phase 0、Phase 1 或 Constitution re-check。
 `contracts/test/test-conditions.json` 是测试条件父契约。BDD、场景、fixture
 （测试数据）和 assertion（断言）只有在技术适用时才生成；非 UI 功能和
 无 fixture 场景可以记录明确理由。
+
+X2-C 的 Test Conditions、X3 的 Quickstart 和 X4 的最终 Test Readiness 独立归属。
+后续路径阻塞不抹去已完成的测试设计；原始 Blocker owner 保持不变，依赖 Gate 必须
+显式列出同一根因及证据。所有适用产物和就绪行关闭前，整体 readiness 仍为 BLOCKED。
 
 UI/UX 像素级交付准备在 Plan 中完成。Tasks 可以把 `X2B-PX-*` 映射成间距、
 排版、颜色、资产适配、层叠、溢出和裁剪等实现任务；但不得生成截图/基线、

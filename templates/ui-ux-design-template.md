@@ -7,35 +7,41 @@ external source, locator, revision, or baseline.
 
 ## Spec UI Input Inventory
 
-Inventory every applicable Spec-owned UI contract ref exactly once. This table
+Inventory every applicable Spec-owned UX/UI contract ref exactly once. Preserve
+explicit UI/VIS N/A exclusions unmapped with their Spec-backed reasons. This table
 contains refs and statuses only; it does not copy requirement statements,
 baseline locators, rendering contexts, fidelity modes, acceptance envelopes,
 exception bounds, or adaptation decisions.
 
 | Spec ref | Contract class | Spec status | X2-B applicability | X2-B mapping ref or propagated blocker |
 |---|---|---|---|---|
-| UI-001 | UI | specified / BLOCKED | Required / Blocked | X2B-UI-001 / stable upstream blocker |
+| UX-001 | UX | specified / N/A / BLOCKED | Required / N/A / Blocked | X2B-UI-002 / reason / stable upstream blocker |
+| UI-001 | UI | specified / N/A / BLOCKED | Required / N/A / Blocked | X2B-UI-001 / reason / stable upstream blocker |
 | UIP-HOME-001 | UIP | specified / N/A / BLOCKED | Required / N/A / Blocked | X2B-UI-001 / reason / stable upstream blocker |
 | RST-001/content | RST | specified / BLOCKED | Required / Blocked | X2B-UI-001 / stable upstream blocker |
 | PXT-001 | PXT | specified / BLOCKED | Required / Blocked | X2B-PX-001 / stable upstream blocker |
 | ADP-001/accessibility-and-user-scaling | ADP | specified / BLOCKED | Required / Blocked | X2B-ADP-001 / stable upstream blocker |
 
-Allowed contract classes are `UI`, `VIS`, `UIP`, `UIR`, `UIC`, `UID`, `UIS`,
+Allowed contract classes are `UX`, `UI`, `VIS`, `UIP`, `UIR`, `UIC`, `UID`, `UIS`,
 `UIV`, `UIW`, `UIT`, `UIA`, `UIM`, `UIE`, `UIAX`, `UIN`, `UIAC`, `RST`,
 `PXR`, `PXT`, `PEX`, and `ADP`. Blocked Spec applicability remains blocked with the same stable
 blocker; it is never relabeled `N/A` or replaced by a Plan decision.
 
 ## General UI Delivery Mappings
 
-| X2B mapping ref | UI/VIS/RST + Canonical refs | Canonical target bindings | Surface / region binding | Component responsibility / composition / state ownership | Navigation / input / responsive / accessibility delivery | DEC-UI refs | UIF / interface / asset refs | Status / blocker |
-|---|---|---|---|---|---|---|---|---|
-| X2B-UI-001 | [UI/VIS/RST plus applicable UIP/UIR/UIC/UID/UIS/UIV/UIW/UIT/UIA/UIM/UIE/UIAX/UIN/UIAC refs] | [Exactly one target-platform component/API/Theme/resource/adaptation binding per Canonical ID.] | [Exact delivery binding.] | [Plan-owned component and state delivery design.] | [Plan-owned navigation/input/layout/accessibility delivery.] | [DEC-UI refs] | [Resolved refs or explicit N/A.] | [READY / BLOCKED: stable ID] |
+| X2B mapping ref | delivery_kind | UX or UI/VIS/RST + Canonical refs | Canonical target bindings | Surface / region binding | Component responsibility / composition / state ownership | Navigation / input / responsive / accessibility delivery | DEC-UI refs | UIF / interface / asset refs | Status / blocker |
+|---|---|---|---|---|---|---|---|---|---|
+| X2B-UI-001 | graphical (default when absent) | [UI/VIS/RST plus applicable UIP/UIR/UIC/UID/UIS/UIV/UIW/UIT/UIA/UIM/UIE/UIAX/UIN/UIAC refs] | [Exactly one target-platform component/API/Theme/resource/adaptation binding per Canonical ID.] | [Exact delivery binding.] | [Plan-owned component and state delivery design.] | [Plan-owned navigation/input/layout/accessibility delivery.] | [DEC-UI refs] | [Resolved refs or explicit N/A.] | [READY / BLOCKED: stable ID] |
+| X2B-UI-002 | non_graphical (explicit) | [Applicable UX refs only.] | [None; no invented Canonical bindings.] | [Terminal/report destination: surface_region_binding.] | [Handler/state/feedback ownership: component_delivery.] | [Applicable input/accessibility and navigation/responsive N/A rationale: navigation_input_responsive_accessibility.] | [DEC-UI refs] | [Required matching non-graphical UIF refs; applicable interface/source refs.] | [READY / BLOCKED: stable ID] |
 
-Each applicable Canonical ID occurs in exactly one `X2B-*` mapping and exactly
-one non-empty target binding, or propagates its stable Spec blocker. Bindings
-preserve the object's owning `UI-*`/`VIS-*` refs. X2-B does not recover missing
-design by opening UIHTML, Figma, screenshots, descriptions, or `SRC-*`
-locators.
+Each applicable graphical Canonical ID occurs in exactly one `X2B-*` mapping
+and exactly one non-empty target binding, or propagates its stable Spec blocker.
+Bindings preserve the object's owning `UI-*`/`VIS-*` refs. Canonical absence
+blocks applicable graphical delivery only. Non-graphical delivery retains
+`general-ui` / `X2B-UI-*`, requires explicit `delivery_kind: non_graphical`,
+consumes applicable UX refs only, and has absent/empty `canonical_bindings`
+and visual fields. Keep UI/VIS N/A rows unmapped. X2-B does not recover missing
+design by opening UIHTML, Figma, screenshots, descriptions, or `SRC-*` locators.
 
 ## Pixel-Target Delivery Mappings
 
@@ -59,24 +65,33 @@ reinterpret, or replace `preserve`, `adapt`, `add`, `omit`, `clarify`, or
 
 ## UIF Contracts
 
-| X2B mapping refs | SRC + UI/VIS refs | UIF path | Start view / events / routes | Observable states/feedback | API/interface refs | Blocker |
-|---|---|---|---|---|---|---|
-| [X2B refs] | [UI/VIS + UIP/UIS/UIE refs; SRC refs are provenance only] | [contracts/uif/*.expected.json] | [UIF delivery path.] | [Referenced observable outcomes.] | [Resolved refs.] | [None / stable ID] |
+| X2B mapping refs | delivery_kind | SRC + requirement refs | UIF path | Start view / events / routes | Observable states/feedback | API/interface refs | Blocker |
+|---|---|---|---|---|---|---|---|
+| [X2B refs] | [graphical (default) / explicit non_graphical] | [UI/VIS refs for graphical; UX refs only for non_graphical; SRC refs are provenance only] | [contracts/uif/*.expected.json] | [Graphical or terminal/report interaction path.] | [Referenced observable outcomes.] | [Resolved refs.] | [None / stable ID] |
 
+UIF `delivery_kind` must match the mapping. The union of referenced UIF
+`requirement_refs` equals its applicable requirement refs; `source_refs`
+cover its declared SRC provenance. Non-graphical mappings require non-empty
+`uif_refs` and matching non-graphical contracts with no visual fields/bindings.
+For the Expected UIF template, retain `delivery_kind: graphical` and UI/VIS
+refs for graphical delivery; for terminal/report delivery set
+`delivery_kind: non_graphical`, use UX refs only, describe the terminal/report
+entry context in `start_view`, and omit/empty all five visual reference fields.
 UIF references interface schemas; it does not duplicate API payloads.
 
 ## X4 UI/UX Delivery Readiness
 
 Every required `X2B-*` mapping has exactly one closed row.
 
-| X2B mapping ref | Mapping class | Required Spec refs | Resolved DEC-UI / UIF / interface / asset / exception refs | Status | Local evidence | Blocker |
-|---|---|---|---|---|---|---|
-| X2B-UI-001 | general-ui | [refs] | [resolved refs] | READY / BLOCKED | [Local delivery evidence.] | [None / stable ID] |
+| X2B mapping ref | Mapping class | delivery_kind | Required Spec refs | Resolved DEC-UI / UIF / interface / asset / exception refs | Status | Local evidence | Blocker |
+|---|---|---|---|---|---|---|---|
+| X2B-UI-001 | general-ui | graphical / explicit non_graphical | [UI/VIS/Canonical or UX refs as applicable.] | [resolved refs] | READY / BLOCKED | [Local delivery and matching UIF ownership evidence.] | [None / stable ID] |
 
 `X2B_UIUX_READY` is READY only when the recorded Spec digest is current, the
 inventory and delivery mappings are complete and unique, every internal ref
-resolves, every readiness row is closed, no Spec-owned value is duplicated,
-and no X2-B/reconciliation finding remains.
+resolves, non-graphical mappings have matching UX/UIF kind, ownership and source
+coverage without Canonical/visual bindings, every readiness row is closed, no
+Spec-owned value is duplicated, and no X2-B/reconciliation finding remains.
 
 Pixel delivery/review is owned here, never by Test Conditions. This artifact
 contains no BDD strategy, general test levels, task IDs, implementation

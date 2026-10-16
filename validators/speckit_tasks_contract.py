@@ -153,7 +153,7 @@ CANONICAL_TRACEABILITY_PREFIXES = (
     "UIW-", "UIT-", "UIA-", "UIM-", "UIE-", "UIN-",
 )
 TRACEABILITY_PREFIXES = (
-    "UI-", "VIS-", "PXT-", "PEX-", "ADP-", *CANONICAL_TRACEABILITY_PREFIXES
+    "UX-", "UI-", "VIS-", "PXT-", "PEX-", "ADP-", *CANONICAL_TRACEABILITY_PREFIXES
 )
 
 
@@ -357,6 +357,19 @@ def validate_tasks_x2b_derivation(bundle: dict[str, Any]) -> None:
     for mapping_id, mapping in mappings_by_id.items():
         mapping_class = str(_mapping_class(mapping_id))
         status = mapping.get("status")
+        delivery_kind = mapping.get("delivery_kind", "graphical")
+        if delivery_kind not in ("graphical", "non_graphical") or (
+            delivery_kind == "non_graphical" and mapping_class != "UI"
+        ):
+            _fail(
+                "TASK_X2B_REF_UNKNOWN",
+                f"{mapping_id} has invalid delivery_kind for {mapping_class}",
+            )
+        if delivery_kind == "non_graphical" and mapping.get("canonical_bindings"):
+            _fail(
+                "TASK_SPEC_OWNERSHIP_LEAK",
+                f"{mapping_id} non_graphical invents Canonical UI bindings",
+            )
         dimensions = set(
             map(
                 str,
@@ -413,6 +426,14 @@ def validate_tasks_x2b_derivation(bundle: dict[str, Any]) -> None:
                 f"{mapping_id} has unknown traceability ref",
             )
 
+        if any(
+            str(ref).startswith("UX-") != (delivery_kind == "non_graphical")
+            for ref in traceability_refs
+        ):
+            _fail(
+                "TASK_X2B_REF_UNKNOWN",
+                f"{mapping_id} traceability differs from its delivery_kind",
+            )
         if status == "Required":
             if mapping.get("review_method_only") is True:
                 if dimensions or not mapping.get("no_task_rationale"):
@@ -672,6 +693,15 @@ def validate_tasks_x2b_derivation(bundle: dict[str, Any]) -> None:
                 "TASK_CANONICAL_REF_MISSING",
                 f"{mapping_id} tasks omit {sorted(missing_canonical_refs)[0]}",
             )
+        if mapping.get("delivery_kind") == "non_graphical":
+            missing_ux_refs = set(map(str, mapping["traceability_refs"])) - (
+                traceability_by_mapping[mapping_id]
+            )
+            if missing_ux_refs:
+                _fail(
+                    "TASK_X2B_REF_UNKNOWN",
+                    f"{mapping_id} tasks omit {sorted(missing_ux_refs)[0]}",
+                )
 
         for dependency_ref in map(str, mapping.get("depends_on", [])):
             dependency_tasks = task_ids_by_mapping[dependency_ref]
@@ -827,11 +857,12 @@ def validate_tasks_x2b_derivation(bundle: dict[str, Any]) -> None:
             "TASK_FINAL_REVIEW_MAPPING_MISSING",
             "Final Code Review does not cover every implementation mapping",
         )
-    required_review_canonical_refs = {
+    required_review_traceability_refs = {
         str(ref)
         for mapping_id in implementation_mapping_ids
         for ref in mappings_by_id[mapping_id].get("traceability_refs", [])
         if str(ref).startswith(CANONICAL_TRACEABILITY_PREFIXES)
+        or mappings_by_id[mapping_id].get("delivery_kind") == "non_graphical"
     }
     raw_review_traceability_refs = final_review.get("traceability_refs", [])
     if not isinstance(raw_review_traceability_refs, list):
@@ -840,10 +871,10 @@ def validate_tasks_x2b_derivation(bundle: dict[str, Any]) -> None:
             "Final Code Review traceability_refs must be a list",
         )
     review_traceability_refs = set(map(str, raw_review_traceability_refs))
-    if review_traceability_refs != required_review_canonical_refs:
+    if review_traceability_refs != required_review_traceability_refs:
         _fail(
             "TASK_FINAL_REVIEW_MAPPING_MISSING",
-            "Final Code Review does not preserve every Canonical UI ref",
+            "Final Code Review does not preserve every Canonical UI or non-graphical UX ref",
         )
     review_scopes = set(
         map(

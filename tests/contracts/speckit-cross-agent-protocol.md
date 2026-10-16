@@ -51,11 +51,18 @@ Every preset-owned command profile defines:
 - `required_outputs`: lane-qualified decisions, X2-A/X2-B/X2-C designs,
   `TC-*`, `VAL-*`, or independent readiness content explicitly named by the
   assigned scope.
-- `output_contract`: required outputs plus `blockers` and `context_gaps`.
-- `validation_gate`: `PLAN_OUTPUT_READY` over Plan outputs and internal refs
-  only, with a lane-local Gate on each assignment.
-- `stop_conditions`: an unmet entry Gate, an out-of-scope read/write, an
-  unresolved required ref, or a blocker owned by another lane.
+- `output_contract`: required outputs plus `blockers` and `context_gaps`;
+  terminal/report UX uses explicit non_graphical general-ui/X2B-UI mappings
+  with matching UX/UIF ownership, no invented Canonical bindings, and retained
+  unmapped UI/VIS N/A exclusions.
+- `validation_gate`: final `PLAN_OUTPUT_READY` over Plan outputs and internal
+  refs only, with an independently evidenced lane-local Gate on each
+  assignment. X2-C design readiness does not require X3 paths or final
+  readiness to be Required before their gate closes.
+- `stop_conditions`: an unmet entry Gate, an out-of-scope read/write, or an
+  unresolved required ref stops only its dependent scope. Propagated blocks
+  keep their registered original lane owner and explicit dependent-gate
+  evidence; independent design is preserved but final READY remains blocked.
 - `fallback`: the Plan Core Agent processes one assigned scope at a time and
   preserves final-write ownership.
 
@@ -69,7 +76,8 @@ Every preset-owned command profile defines:
 - `allowed_writes`: `tasks.md` only.
 - `output_contract`: concrete path bindings, dependency-ordered implementation,
   required functional validation/evidence, and last-phase Final Code Review
-  items, plus blockers and `context_gaps`.
+  items, plus blockers and `context_gaps`; preserve each mapping's delivery
+  kind and all applicable UX or graphical/Canonical traceability.
 - `validation_gate`: source/evidence binding, dependency ordering, final review
   placement, and blocker aggregation.
 - `stop_conditions`: `PLAN_OUTPUT_INCOMPLETE`, an unresolved Plan blocker,
